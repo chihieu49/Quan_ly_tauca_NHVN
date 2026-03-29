@@ -126,7 +126,6 @@ def style_excel(writer, df_final, df_thong_ke):
 # GIAO DIỆN WEB
 # =========================================================
 
-# --- CHÈN LOGO VÀ TIÊU ĐỀ ---
 col_logo, col_title = st.columns([1, 11])
 with col_logo:
     try:
@@ -244,7 +243,6 @@ with tab1:
                             for col in df_thong_ke.columns:
                                 if col != 'Xã/Phường (Địa chỉ mới)': tong_cong_row[col] = df_thong_ke[col].sum()
                             
-                            # Tách riêng dòng tổng để vẽ biểu đồ cho đẹp (không bị nhiễu do số tổng quá to)
                             df_thong_ke_hienthi = df_thong_ke.copy()
                             df_thong_ke = pd.concat([df_thong_ke, pd.DataFrame([tong_cong_row])], ignore_index=True)
 
@@ -254,14 +252,12 @@ with tab1:
                             st.markdown("---")
                             st.header("📈 BÁO CÁO KẾT QUẢ THỐNG KÊ")
                             
-                            # 1. Thẻ Số liệu nổi bật
                             m1, m2 = st.columns(2)
                             m1.metric(label="📌 Tổng số Tàu cá lọc được", value=f"{tong_cong_row['Tổng số tàu']} tàu")
                             m2.metric(label="⚠️ Số tàu ĐÃ HẾT HẠN", value=f"{tong_cong_row['Tàu hết hạn']} tàu", delta="Cần chú ý", delta_color="inverse")
                             
-                            st.write("") # Dòng trống
+                            st.write("") 
                             
-                            # 2. Hiển thị Biểu đồ và Bảng song song
                             col_chart, col_table = st.columns([1, 1])
                             
                             with col_chart:
@@ -273,9 +269,30 @@ with tab1:
                                 st.markdown("**Bảng Thống kê chi tiết**")
                                 st.dataframe(df_thong_ke, use_container_width=True, hide_index=True)
                             
-                            # 3. Khung xem trước dữ liệu chi tiết
-                            with st.expander("🔎 Bấm vào đây để Xem trước Danh sách chi tiết (50 tàu đầu tiên)"):
-                                st.dataframe(df_final.head(50), use_container_width=True, hide_index=True)
+                            # =======================================================
+                            # TÍNH NĂNG MỚI: TRA CỨU NHANH TÀU HẾT HẠN THEO XÃ
+                            # =======================================================
+                            st.markdown("---")
+                            st.subheader("⚠️ TRA CỨU DANH SÁCH TÀU HẾT HẠN")
+                            
+                            df_het_han = df_filtered[df_filtered['_da_het_han'] == True].copy()
+                            
+                            if len(df_het_han) > 0:
+                                danh_sach_xa_het_han = ["Tất cả"] + sorted(df_het_han['Địa chỉ mới (Tạo tự động)'].dropna().unique().tolist())
+                                xa_tra_cuu = st.selectbox("Lựa chọn Xã/Phường để xem chi tiết tàu hết hạn:", danh_sach_xa_het_han)
+                                
+                                if xa_tra_cuu == "Tất cả":
+                                    df_hien_thi = df_het_han
+                                else:
+                                    df_hien_thi = df_het_han[df_het_han['Địa chỉ mới (Tạo tự động)'] == xa_tra_cuu]
+                                    
+                                cols_to_show = [col for col in selected_cols if col in df_hien_thi.columns]
+                                df_hien_thi_final = df_hien_thi[cols_to_show].copy()
+                                df_hien_thi_final.insert(0, 'TT', range(1, len(df_hien_thi_final) + 1))
+                                
+                                st.dataframe(df_hien_thi_final, use_container_width=True, hide_index=True)
+                            else:
+                                st.success("Tuyệt vời! Không có tàu nào bị hết hạn trong danh sách bạn vừa lọc.")
 
                             st.markdown("---")
                             
@@ -296,7 +313,7 @@ with tab1:
                             st.success("✅ Dữ liệu đã sẵn sàng! Vui lòng tải file Excel hoàn chỉnh ở nút bên dưới.")
                             
                             st.download_button(
-                                label="📥 TẢI XUỐNG FILE EXCEL ĐÃ XỬ LÝ",
+                                label="📥 TẢI XUỐNG FILE EXCEL ĐÃ TRANG TRÍ",
                                 data=processed_data,
                                 file_name=final_file_name,
                                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -364,7 +381,6 @@ with tab2:
                         st.header("👀 KẾT QUẢ ĐỐI CHIẾU")
                         st.success(f"🎉 Đã tìm thấy và đắp thêm dữ liệu. Tổng số dòng: {len(df_merged)}")
                         
-                        # Khung xem trước kết quả
                         with st.expander("🔎 Bấm vào đây để Xem trước File kết quả"):
                             st.dataframe(df_merged.head(50), use_container_width=True, hide_index=True)
                             
