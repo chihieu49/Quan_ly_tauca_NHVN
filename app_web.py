@@ -128,10 +128,10 @@ def style_excel(writer, df_final, df_thong_ke):
 # =========================================================
 # GIAO DIỆN WEB
 # =========================================================
-st.title("🚢 HỆ THỐNG QUẢN LÝ VÀ PHÂN TÍCH DỮ LIỆU TÀU CÁ")
+st.title("🚢 HỆ THỐNG QUẢN LÝ VÀ PHÂN TÍCH DỮ LIỆU TÀU CÁ NINH HOÀ_VẠN NINH - CODER LÊ HIẾU")
 st.markdown("---")
 
-tab1, tab2 = st.tabs(["📊 LỌC & THỐNG KÊ DANH SÁCH", "🔄 ĐỐI CHIẾU DỮ LIỆU (VLOOKUP)"])
+tab1, tab2 = st.tabs(["📊 LỌC & THỐNG KÊ DANH SÁCH", "🔄 ĐỐI CHIẾU DỮ LIỆU"])
 
 # ---------------------------------------------------------
 # TAB 1: LỌC & THỐNG KÊ
@@ -159,7 +159,7 @@ with tab1:
             default_cols_options = ["Địa chỉ mới (Tạo tự động)"] + default_cols
             
             selected_cols = st.multiselect(
-                "Chọn các Cột Báo cáo (Có thể kéo thả để sắp xếp thứ tự):",
+                "Chọn các Cột Báo cáo:",
                 options=all_cols_options,
                 default=default_cols_options
             )
