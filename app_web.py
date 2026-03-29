@@ -187,8 +187,8 @@ with tab1:
             default_cols = list(std_to_original_t1.values())
             if selected_date_col not in default_cols: default_cols.append(selected_date_col)
             
-            all_cols_options = ["Địa chỉ mới (Tạo tự động)"] + cols_t1
-            default_cols_options = ["Địa chỉ mới (Tạo tự động)"] + default_cols
+            all_cols_options = ["Xã/Phường mới"] + cols_t1
+            default_cols_options = ["Xã/Phường mới"] + default_cols
             default_cols_options = [c for c in default_cols_options if c in all_cols_options]
             
             selected_cols = st.multiselect(
@@ -206,15 +206,15 @@ with tab1:
                         
                         col_diachi_goc = std_to_original_t1.get('DIA_CHI', '')
                         if col_diachi_goc:
-                            df_raw['Địa chỉ mới (Tạo tự động)'] = df_raw[col_diachi_goc].apply(get_new_address)
+                            df_raw['Xã/Phường mới'] = df_raw[col_diachi_goc].apply(get_new_address)
                         else:
                             st.error("Không tìm thấy Cột Địa chỉ trong file gốc!")
                             st.stop()
                             
-                        df_filtered = df_raw[df_raw['Địa chỉ mới (Tạo tự động)'].notna()].copy()
+                        df_filtered = df_raw[df_raw['Xã/Phường mới'].notna()].copy()
 
                         if selected_commune != "Tất cả":
-                            df_filtered = df_filtered[df_filtered['Địa chỉ mới (Tạo tự động)'] == selected_commune]
+                            df_filtered = df_filtered[df_filtered['Xã/Phường mới'] == selected_commune]
 
                         # Ép kiểu ngày chuẩn xác, chống nhầm lẫn định dạng 
                         try:
@@ -259,14 +259,14 @@ with tab1:
                             df_filtered['Nhom_Lmax'] = df_filtered['Lmax_num'].apply(phan_loai_lmax)
 
                             col_id = std_to_original_t1.get('SO_DANG_KY', df_filtered.columns[0])
-                            df_thong_ke_main = df_filtered.groupby('Địa chỉ mới (Tạo tự động)').agg(Tong_tau=(col_id, 'count'), Tau_het_han=('_da_het_han', 'sum')).reset_index()
-                            lmax_pivot = pd.crosstab(df_filtered['Địa chỉ mới (Tạo tự động)'], df_filtered['Nhom_Lmax']).reset_index()
-                            df_thong_ke = pd.merge(df_thong_ke_main, lmax_pivot, on='Địa chỉ mới (Tạo tự động)', how='left')
+                            df_thong_ke_main = df_filtered.groupby('Xã/Phường mới').agg(Tong_tau=(col_id, 'count'), Tau_het_han=('_da_het_han', 'sum')).reset_index()
+                            lmax_pivot = pd.crosstab(df_filtered['Xã/Phường mới'], df_filtered['Nhom_Lmax']).reset_index()
+                            df_thong_ke = pd.merge(df_thong_ke_main, lmax_pivot, on='Xã/Phường mới', how='left')
 
                             for col in ['<6', '6 đến <12', '12 đến <15', '15 đến <24', '>=24', 'Không rõ']:
                                 if col not in df_thong_ke.columns: df_thong_ke[col] = 0
 
-                            df_thong_ke.rename(columns={'Địa chỉ mới (Tạo tự động)': 'Xã/Phường (Địa chỉ mới)', 'Tong_tau': 'Tổng số tàu', 'Tau_het_han': 'Tàu hết hạn'}, inplace=True)
+                            df_thong_ke.rename(columns={'Xã/Phường mới': 'Xã/Phường (Địa chỉ mới)', 'Tong_tau': 'Tổng số tàu', 'Tau_het_han': 'Tàu hết hạn'}, inplace=True)
                             final_cols_tk = ['Xã/Phường (Địa chỉ mới)', 'Tổng số tàu', 'Tàu hết hạn']
                             if df_thong_ke['<6'].sum() > 0: final_cols_tk.append('<6')
                             final_cols_tk.extend(['6 đến <12', '12 đến <15', '15 đến <24', '>=24'])
@@ -347,13 +347,13 @@ with tab1:
                 st.subheader("⚠️ TRA CỨU DANH SÁCH TÀU HẾT HẠN (Chi tiết)")
                 
                 if len(df_het_han) > 0:
-                    danh_sach_xa_het_han = ["Tất cả"] + sorted(df_het_han['Địa chỉ mới (Tạo tự động)'].dropna().unique().tolist())
+                    danh_sach_xa_het_han = ["Tất cả"] + sorted(df_het_han['Xã/Phường mới'].dropna().unique().tolist())
                     xa_tra_cuu = st.selectbox("Lựa chọn Xã/Phường để xem chi tiết tàu hết hạn:", danh_sach_xa_het_han, key="lookup_xa_t1")
                     
                     if xa_tra_cuu == "Tất cả":
                         df_hien_thi = df_het_han
                     else:
-                        df_hien_thi = df_het_han[df_het_han['Địa chỉ mới (Tạo tự động)'] == xa_tra_cuu]
+                        df_hien_thi = df_het_han[df_het_han['Xã/Phường mới'] == xa_tra_cuu]
                         
                     cols_to_show = [col for col in t1_selected_cols if col in df_hien_thi.columns]
                     if col_han_goc and col_han_goc not in cols_to_show and col_han_goc in df_hien_thi.columns:
