@@ -37,6 +37,9 @@ mapping_rules = {
     "Bắc Nha Trang": {"keywords": ["lương sơn", "vĩnh lương", "văn đăng", "cát lợi", "võ tánh", "phạm văn đồng"], "exclude": ["ninh hòa", "ninh hoà", "vạn ninh", "cam ranh", "diên khánh", "cam lâm"]}
 }
 
+if 't1_processed' not in st.session_state: st.session_state['t1_processed'] = False
+if 't2_processed' not in st.session_state: st.session_state['t2_processed'] = False
+
 # =========================================================
 # HÀM BỔ TRỢ CHUNG
 # =========================================================
@@ -89,22 +92,32 @@ def get_new_address(old_address):
             if keyword in address_str: return new_name
     return None
 
-def style_excel(writer, df_final, df_thong_ke):
+def style_excel(writer, df_final, df_thong_ke, df_het_han_export):
     df_final.to_excel(writer, sheet_name='Danh sách chi tiết', index=False)
     df_thong_ke.to_excel(writer, sheet_name='Bảng thống kê', index=False)
+    if not df_het_han_export.empty:
+        df_het_han_export.to_excel(writer, sheet_name='Tàu Hết Hạn', index=False)
     
     workbook = writer.book
-    ws_thong_ke = writer.sheets['Bảng thống kê']
-    ws_chi_tiet = writer.sheets['Danh sách chi tiết']
-
+    
     header_fill = PatternFill(start_color="4F81BD", end_color="4F81BD", fill_type="solid")
-    total_fill = PatternFill(start_color="FDE9D9", end_color="FDE9D9", fill_type="solid")
-    header_font = Font(color="FFFFFF", bold=True)
-    total_font = Font(bold=True, color="C0504D")
-    thin_border = Border(left=Side(style='thin'), right=Side(style='thin'), top=Side(style='thin'), bottom=Side(style='thin'))
     center_align = Alignment(horizontal="center", vertical="center")
-    left_align = Alignment(horizontal="left", vertical="center")
+    header_font = Font(color="FFFFFF", bold=True)
+    thin_border = Border(left=Side(style='thin'), right=Side(style='thin'), top=Side(style='thin'), bottom=Side(style='thin'))
 
+    # Sheet 1: Danh sách chi tiết
+    ws_chi_tiet = writer.sheets['Danh sách chi tiết']
+    for col_num, cell in enumerate(ws_chi_tiet[1], 1):
+        cell.fill = header_fill; cell.font = header_font; cell.alignment = center_align; cell.border = thin_border
+        ws_chi_tiet.column_dimensions[cell.column_letter].width = 20
+    ws_chi_tiet.column_dimensions['A'].width = 8 
+
+    # Sheet 2: Bảng thống kê
+    ws_thong_ke = writer.sheets['Bảng thống kê']
+    total_fill = PatternFill(start_color="FDE9D9", end_color="FDE9D9", fill_type="solid")
+    total_font = Font(bold=True, color="C0504D")
+    left_align = Alignment(horizontal="left", vertical="center")
+    
     for col_num, cell in enumerate(ws_thong_ke[1], 1):
         cell.fill = header_fill; cell.font = header_font; cell.alignment = center_align; cell.border = thin_border
         ws_thong_ke.column_dimensions[cell.column_letter].width = 30 if col_num == 1 else 15
@@ -116,11 +129,15 @@ def style_excel(writer, df_final, df_thong_ke):
             cell.border = thin_border
             cell.alignment = left_align if col == 1 else center_align
             if row == max_row: cell.fill = total_fill; cell.font = total_font
-                
-    for col_num, cell in enumerate(ws_chi_tiet[1], 1):
-        cell.fill = header_fill; cell.font = header_font; cell.alignment = center_align; cell.border = thin_border
-        ws_chi_tiet.column_dimensions[cell.column_letter].width = 20
-    ws_chi_tiet.column_dimensions['A'].width = 8 
+
+    # Sheet 3: Tàu Hết Hạn
+    if not df_het_han_export.empty:
+        ws_het_han = writer.sheets['Tàu Hết Hạn']
+        danger_fill = PatternFill(start_color="C0504D", end_color="C0504D", fill_type="solid")
+        for col_num, cell in enumerate(ws_het_han[1], 1):
+            cell.fill = danger_fill; cell.font = header_font; cell.alignment = center_align; cell.border = thin_border
+            ws_het_han.column_dimensions[cell.column_letter].width = 20
+        ws_het_han.column_dimensions['A'].width = 8 
 
 # =========================================================
 # GIAO DIỆN WEB
@@ -155,17 +172,24 @@ with tab1:
         if cols_t1:
             st.success("✅ Đã nhận diện cấu trúc file thành công!")
             
-            st.header("2. Điều kiện Lọc & Tùy chọn Cột")
-            col1, col2 = st.columns(2)
+            st.header("2. Tùy chọn Lọc & Cột báo cáo")
+            col1, col2, col3 = st.columns(3)
             with col1:
                 danh_sach_xa = ["Tất cả", "Xã Đại Lãnh", "Xã Tu Bông", "Xã Vạn Hưng", "Xã Vạn Ninh", "Xã Vạn Thắng", "Phường Đông Ninh Hoà", "Phường Hoà Thắng", "Xã Bắc Ninh Hoà", "Xã Nam Ninh Hoà", "Bắc Nha Trang"]
                 selected_commune = st.selectbox("Chọn Địa phương:", danh_sach_xa, key="sel_commune_t1")
             with col2:
-                selected_date = st.text_input("Hạn GPKTTS/Đăng kiểm (Ví dụ: 30/06/2026. Để trống lấy tất cả):", key="sel_date_t1")
+                # Tìm mốc ngày người dùng muốn làm chuẩn
+                guess_idx = cols_t1.index(std_to_original_t1['NGAY_HET_HAN']) if 'NGAY_HET_HAN' in std_to_original_t1 and std_to_original_t1['NGAY_HET_HAN'] in cols_t1 else 0
+                selected_date_col = st.selectbox("Cột làm mốc Tính Hết Hạn:", cols_t1, index=guess_idx, key="sel_date_col_t1")
+            with col3:
+                selected_date = st.text_input("Lọc tàu đến mốc (VD: 30/06/2026. Trống=Tất cả):", key="sel_date_t1")
             
             default_cols = list(std_to_original_t1.values())
+            if selected_date_col not in default_cols: default_cols.append(selected_date_col)
+            
             all_cols_options = ["Địa chỉ mới (Tạo tự động)"] + cols_t1
             default_cols_options = ["Địa chỉ mới (Tạo tự động)"] + default_cols
+            default_cols_options = [c for c in default_cols_options if c in all_cols_options]
             
             selected_cols = st.multiselect(
                 "Chọn Cột muốn xuất báo cáo (Thứ tự trên file Excel = Thứ tự bạn click chọn):",
@@ -192,20 +216,21 @@ with tab1:
                         if selected_commune != "Tất cả":
                             df_filtered = df_filtered[df_filtered['Địa chỉ mới (Tạo tự động)'] == selected_commune]
 
-                        # Fix lỗi đọc nhầm năm 1926
-                        if 'NGAY_HET_HAN' in std_to_original_t1:
-                            col_ngay_het_han = std_to_original_t1['NGAY_HET_HAN']
-                            parsed_dates = pd.to_datetime(df_filtered[col_ngay_het_han], dayfirst=True, errors='coerce')
+                        # Ép kiểu ngày chuẩn xác, chống nhầm lẫn định dạng 
+                        try:
+                            parsed_dates = pd.to_datetime(df_filtered[selected_date_col], dayfirst=True, format='mixed', errors='coerce')
+                        except ValueError:
+                            parsed_dates = pd.to_datetime(df_filtered[selected_date_col], dayfirst=True, errors='coerce')
                             
-                            mask_old = (parsed_dates.dt.year < 1950) & parsed_dates.notna()
-                            if mask_old.any():
-                                parsed_dates.loc[mask_old] = parsed_dates.loc[mask_old].apply(lambda x: x.replace(year=x.year + 100))
-                            
-                            df_filtered['Ngày_dt_temp'] = parsed_dates
-                            
-                            if selected_date != "":
-                                target_date = pd.to_datetime(selected_date, dayfirst=True)
-                                df_filtered = df_filtered[df_filtered['Ngày_dt_temp'] <= target_date]
+                        mask_old = (parsed_dates.dt.year < 1950) & parsed_dates.notna()
+                        if mask_old.any():
+                            parsed_dates.loc[mask_old] = parsed_dates.loc[mask_old].apply(lambda x: x.replace(year=x.year + 100))
+                        
+                        df_filtered['Ngày_dt_temp'] = parsed_dates
+                        
+                        if selected_date != "":
+                            target_date = pd.to_datetime(selected_date, dayfirst=True)
+                            df_filtered = df_filtered[df_filtered['Ngày_dt_temp'] <= target_date]
                         
                         if len(df_filtered) == 0:
                             st.warning("⚠️ Không có tàu cá nào thỏa mãn các điều kiện lọc của bạn!")
@@ -218,10 +243,7 @@ with tab1:
                             df_final.insert(0, 'TT', range(1, len(df_final) + 1))
 
                             current_date = pd.Timestamp.now().normalize()
-                            if 'NGAY_HET_HAN' in std_to_original_t1: 
-                                df_filtered['_da_het_han'] = df_filtered['Ngày_dt_temp'] < current_date
-                            else: 
-                                df_filtered['_da_het_han'] = False
+                            df_filtered['_da_het_han'] = df_filtered['Ngày_dt_temp'] < current_date
 
                             if 'LMAX' in std_to_original_t1: df_filtered['Lmax_num'] = pd.to_numeric(df_filtered[std_to_original_t1['LMAX']], errors='coerce')
                             else: df_filtered['Lmax_num'] = None
@@ -258,12 +280,20 @@ with tab1:
                             df_thong_ke_hienthi = df_thong_ke.copy()
                             df_thong_ke = pd.concat([df_thong_ke, pd.DataFrame([tong_cong_row])], ignore_index=True)
 
-                            # Lọc tàu hết hạn chuẩn 100%
+                            # Xử lý dứt điểm Tàu hết hạn
                             df_het_han = df_filtered[df_filtered['_da_het_han'] == True].copy()
+                            
+                            cols_to_export_hh = [c for c in selected_cols if c in df_het_han.columns]
+                            if selected_date_col not in cols_to_export_hh and selected_date_col in df_het_han.columns:
+                                cols_to_export_hh.append(selected_date_col)
+                                
+                            df_het_han_export = df_het_han[cols_to_export_hh].copy()
+                            if not df_het_han_export.empty:
+                                df_het_han_export.insert(0, 'TT', range(1, len(df_het_han_export) + 1))
 
                             output = io.BytesIO()
                             with pd.ExcelWriter(output, engine='openpyxl') as writer:
-                                style_excel(writer, df_final, df_thong_ke)
+                                style_excel(writer, df_final, df_thong_ke, df_het_han_export)
                             processed_data = output.getvalue()
                             
                             now_str = datetime.now().strftime("%d%m%Y_%Hh%Mm")
@@ -279,7 +309,7 @@ with tab1:
                             st.session_state['t1_processed_data'] = processed_data
                             st.session_state['t1_final_file_name'] = final_file_name
                             st.session_state['t1_selected_cols'] = selected_cols
-                            st.session_state['t1_col_ngay_het_han'] = std_to_original_t1.get('NGAY_HET_HAN', None)
+                            st.session_state['t1_col_ngay_het_han'] = selected_date_col
                             
                     except Exception as e:
                         st.error(f"Lỗi hệ thống: {e}")
@@ -332,13 +362,13 @@ with tab1:
                     df_hien_thi_final = df_hien_thi[cols_to_show].copy()
                     df_hien_thi_final.insert(0, 'TT', range(1, len(df_hien_thi_final) + 1))
                     
-                    st.success(f"📌 Đang hiển thị **{len(df_hien_thi_final)}** tàu đã hết hạn.")
+                    st.success(f"📌 Đang hiển thị **{len(df_hien_thi_final)}** tàu đã hết hạn. Đã ép hiển thị cột: [{col_han_goc}] để kiểm chứng.")
                     st.dataframe(df_hien_thi_final, use_container_width=True, hide_index=True)
                 else:
                     st.success("Tuyệt vời! Không có tàu nào bị hết hạn tính đến thời điểm hiện tại.")
 
                 st.markdown("---")
-                st.success("✅ Dữ liệu đã sẵn sàng! Vui lòng tải file Excel hoàn chỉnh ở nút bên dưới.")
+                st.success("✅ Dữ liệu đã sẵn sàng! File Excel xuất ra sẽ gồm 3 Trang: Toàn bộ tàu, Thống kê, và Tàu Hết Hạn.")
                 st.download_button(
                     label="📥 TẢI XUỐNG FILE EXCEL ĐÃ TRANG TRÍ",
                     data=processed_data,
