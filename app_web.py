@@ -296,7 +296,7 @@ with tab1:
                             st.success("✅ Dữ liệu đã sẵn sàng! Vui lòng tải file Excel hoàn chỉnh ở nút bên dưới.")
                             
                             st.download_button(
-                                label="📥 TẢI XUỐNG FILE EXCEL ĐÃ TRANG TRÍ",
+                                label="📥 TẢI XUỐNG FILE EXCEL ĐÃ XỬ LÝ",
                                 data=processed_data,
                                 file_name=final_file_name,
                                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
