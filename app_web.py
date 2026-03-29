@@ -9,7 +9,6 @@ from openpyxl.styles import PatternFill, Font, Alignment, Border, Side
 # =========================================================
 st.set_page_config(page_title="Quản lý Tàu cá - Khánh Hòa", page_icon="🚢", layout="wide")
 
-# Bộ từ điển và Luật lệ AI
 COLUMN_ALIASES = {
     'SO_DANG_KY': ['số đăng ký', 'biển số', 'số đk'],
     'CHU_TAU': ['chủ tàu', 'chủ phương tiện', 'họ tên chủ', 'tên chủ'],
@@ -54,7 +53,6 @@ def find_true_header_and_cols(uploaded_file):
                 max_valid_cells = valid_cells
                 best_idx = i
                 
-                # Nhận diện cột nếu là Tab 1
                 temp_map = {}
                 for cell_val in row.values:
                     cell_str = str(cell_val).lower().strip()
@@ -66,13 +64,12 @@ def find_true_header_and_cols(uploaded_file):
                                 temp_map[std_name] = orig_name; break
                 std_to_original = temp_map
 
-        # Đưa con trỏ file về đầu trước khi đọc lại
         uploaded_file.seek(0)
         df_real = pd.read_excel(uploaded_file, header=best_idx, nrows=5)
         cols = df_real.columns.astype(str).str.strip().tolist()
         cols = [c for c in cols if not c.lower().startswith('unnamed') and c.lower() != 'nan' and c != 'None' and c != '']
         
-        uploaded_file.seek(0) # Reset lại con trỏ cho các lần đọc sau
+        uploaded_file.seek(0) 
         return cols, best_idx, std_to_original
     except Exception as e:
         st.error(f"Lỗi đọc file: {e}")
@@ -130,19 +127,19 @@ def style_excel(writer, df_final, df_thong_ke):
 # =========================================================
 
 # --- CHÈN LOGO VÀ TIÊU ĐỀ ---
-col_logo, col_title = st.columns([1, 11]) # Chia tỷ lệ màn hình để logo nằm bên trái, chữ bên phải
+col_logo, col_title = st.columns([1, 11])
 with col_logo:
     try:
         from PIL import Image
         logo = Image.open("logo_kiem_ngu.png")
         st.image(logo, width=160)
     except Exception:
-        st.write("🚢") # Nếu mất file ảnh thì hiện tạm hình con tàu
+        st.write("🚢")
 
 with col_title:
     st.title("HỆ THỐNG PHÂN TÍCH DỮ LIỆU TÀU CÁ")
 
-st.markdown("---") # Đường kẻ ngang
+st.markdown("---")
 
 tab1, tab2 = st.tabs(["📊 LỌC & THỐNG KÊ DANH SÁCH", "🔄 ĐỐI CHIẾU DỮ LIỆU"])
 
@@ -211,7 +208,6 @@ with tab1:
                             df_final = pd.DataFrame(final_dict)
                             df_final.insert(0, 'TT', range(1, len(df_final) + 1))
 
-                            # Tính toán thống kê
                             current_date = pd.Timestamp.now()
                             if 'NGAY_HET_HAN' in std_to_original_t1: df_filtered['_da_het_han'] = df_filtered['Ngày_dt_temp'] < current_date
                             else: df_filtered['_da_het_han'] = False
@@ -247,9 +243,45 @@ with tab1:
                             tong_cong_row = {'Xã/Phường (Địa chỉ mới)': 'TỔNG CỘNG'}
                             for col in df_thong_ke.columns:
                                 if col != 'Xã/Phường (Địa chỉ mới)': tong_cong_row[col] = df_thong_ke[col].sum()
+                            
+                            # Tách riêng dòng tổng để vẽ biểu đồ cho đẹp (không bị nhiễu do số tổng quá to)
+                            df_thong_ke_hienthi = df_thong_ke.copy()
                             df_thong_ke = pd.concat([df_thong_ke, pd.DataFrame([tong_cong_row])], ignore_index=True)
 
-                            # --- TẠO FILE EXCEL ẢO ĐỂ TẢI XUỐNG ---
+                            # =======================================================
+                            # HIỂN THỊ KẾT QUẢ LÊN MÀN HÌNH WEB (DASHBOARD)
+                            # =======================================================
+                            st.markdown("---")
+                            st.header("📈 BÁO CÁO KẾT QUẢ THỐNG KÊ")
+                            
+                            # 1. Thẻ Số liệu nổi bật
+                            m1, m2 = st.columns(2)
+                            m1.metric(label="📌 Tổng số Tàu cá lọc được", value=f"{tong_cong_row['Tổng số tàu']} tàu")
+                            m2.metric(label="⚠️ Số tàu ĐÃ HẾT HẠN", value=f"{tong_cong_row['Tàu hết hạn']} tàu", delta="Cần chú ý", delta_color="inverse")
+                            
+                            st.write("") # Dòng trống
+                            
+                            # 2. Hiển thị Biểu đồ và Bảng song song
+                            col_chart, col_table = st.columns([1, 1])
+                            
+                            with col_chart:
+                                st.markdown("**Biểu đồ Tàu cá theo Địa phương**")
+                                if len(df_thong_ke_hienthi) > 0:
+                                    st.bar_chart(data=df_thong_ke_hienthi, x='Xã/Phường (Địa chỉ mới)', y=['Tổng số tàu', 'Tàu hết hạn'])
+                            
+                            with col_table:
+                                st.markdown("**Bảng Thống kê chi tiết**")
+                                st.dataframe(df_thong_ke, use_container_width=True, hide_index=True)
+                            
+                            # 3. Khung xem trước dữ liệu chi tiết
+                            with st.expander("🔎 Bấm vào đây để Xem trước Danh sách chi tiết (50 tàu đầu tiên)"):
+                                st.dataframe(df_final.head(50), use_container_width=True, hide_index=True)
+
+                            st.markdown("---")
+                            
+                            # =======================================================
+                            # NÚT TẢI XUỐNG
+                            # =======================================================
                             output = io.BytesIO()
                             with pd.ExcelWriter(output, engine='openpyxl') as writer:
                                 style_excel(writer, df_final, df_thong_ke)
@@ -261,10 +293,10 @@ with tab1:
                             if selected_date != "": base_name += f"_Han_{selected_date.replace('/', '')}"
                             final_file_name = f"{base_name}_NHVN_{now_str}.xlsx"
 
-                            st.success(f"🎉 Hoàn thành! Xử lý thành công {tong_cong_row['Tổng số tàu']} tàu cá.")
+                            st.success("✅ Dữ liệu đã sẵn sàng! Vui lòng tải file Excel hoàn chỉnh ở nút bên dưới.")
                             
                             st.download_button(
-                                label="📥 TẢI XUỐNG FILE BÁO CÁO EXCEL",
+                                label="📥 TẢI XUỐNG FILE EXCEL ĐÃ TRANG TRÍ",
                                 data=processed_data,
                                 file_name=final_file_name,
                                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -328,15 +360,23 @@ with tab2:
                         df_merged = pd.merge(df_src, df_tgt_sub, on='_key_match', how='left')
                         df_merged.drop(columns=['_key_match'], inplace=True)
                         
+                        st.markdown("---")
+                        st.header("👀 KẾT QUẢ ĐỐI CHIẾU")
+                        st.success(f"🎉 Đã tìm thấy và đắp thêm dữ liệu. Tổng số dòng: {len(df_merged)}")
+                        
+                        # Khung xem trước kết quả
+                        with st.expander("🔎 Bấm vào đây để Xem trước File kết quả"):
+                            st.dataframe(df_merged.head(50), use_container_width=True, hide_index=True)
+                            
+                        st.markdown("---")
+                        
                         output = io.BytesIO()
-                        # Xuất thẳng ra Excel ảo, không cần format cầu kì
                         df_merged.to_excel(output, index=False)
                         processed_data = output.getvalue()
                         
                         now_str = datetime.now().strftime("%d%m%Y_%Hh%Mm")
                         out_name = f'Ket_qua_Doi_chieu_{now_str}.xlsx'
                         
-                        st.success("🎉 Đã đối chiếu xong!")
                         st.download_button(
                             label="📥 TẢI XUỐNG FILE KẾT QUẢ",
                             data=processed_data,
