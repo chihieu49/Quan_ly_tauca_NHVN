@@ -173,6 +173,7 @@ with tab1:
                 default=default_cols_options
             )
             
+            # --- XỬ LÝ DỮ LIỆU KHI BẤM NÚT VÀ LƯU VÀO KÉT SẮT ---
             if st.button("🚀 BẮT ĐẦU XỬ LÝ & TẠO BÁO CÁO", use_container_width=True, type="primary"):
                 with st.spinner('Đang xử lý dữ liệu bằng AI...'):
                     try:
@@ -200,6 +201,7 @@ with tab1:
 
                         if len(df_filtered) == 0:
                             st.warning("⚠️ Không có tàu cá nào thỏa mãn các điều kiện lọc của bạn!")
+                            st.session_state['t1_processed'] = False # Xóa két sắt nếu không có dữ liệu
                         else:
                             final_dict = {}
                             for col in selected_cols:
@@ -245,64 +247,14 @@ with tab1:
                             
                             df_thong_ke_hienthi = df_thong_ke.copy()
                             df_thong_ke = pd.concat([df_thong_ke, pd.DataFrame([tong_cong_row])], ignore_index=True)
-
-                            # =======================================================
-                            # HIỂN THỊ KẾT QUẢ LÊN MÀN HÌNH WEB (DASHBOARD)
-                            # =======================================================
-                            st.markdown("---")
-                            st.header("📈 BÁO CÁO KẾT QUẢ THỐNG KÊ")
                             
-                            m1, m2 = st.columns(2)
-                            m1.metric(label="📌 Tổng số Tàu cá lọc được", value=f"{tong_cong_row['Tổng số tàu']} tàu")
-                            m2.metric(label="⚠️ Số tàu ĐÃ HẾT HẠN", value=f"{tong_cong_row['Tàu hết hạn']} tàu", delta="Cần chú ý", delta_color="inverse")
-                            
-                            st.write("") 
-                            
-                            col_chart, col_table = st.columns([1, 1])
-                            
-                            with col_chart:
-                                st.markdown("**Biểu đồ Tàu cá theo Địa phương**")
-                                if len(df_thong_ke_hienthi) > 0:
-                                    st.bar_chart(data=df_thong_ke_hienthi, x='Xã/Phường (Địa chỉ mới)', y=['Tổng số tàu', 'Tàu hết hạn'])
-                            
-                            with col_table:
-                                st.markdown("**Bảng Thống kê chi tiết**")
-                                st.dataframe(df_thong_ke, use_container_width=True, hide_index=True)
-                            
-                            # =======================================================
-                            # TÍNH NĂNG MỚI: TRA CỨU NHANH TÀU HẾT HẠN THEO XÃ
-                            # =======================================================
-                            st.markdown("---")
-                            st.subheader("⚠️ TRA CỨU DANH SÁCH TÀU HẾT HẠN")
-                            
+                            # Tách riêng df hết hạn để tra cứu
                             df_het_han = df_filtered[df_filtered['_da_het_han'] == True].copy()
-                            
-                            if len(df_het_han) > 0:
-                                danh_sach_xa_het_han = ["Tất cả"] + sorted(df_het_han['Địa chỉ mới (Tạo tự động)'].dropna().unique().tolist())
-                                xa_tra_cuu = st.selectbox("Lựa chọn Xã/Phường để xem chi tiết tàu hết hạn:", danh_sach_xa_het_han)
-                                
-                                if xa_tra_cuu == "Tất cả":
-                                    df_hien_thi = df_het_han
-                                else:
-                                    df_hien_thi = df_het_han[df_het_han['Địa chỉ mới (Tạo tự động)'] == xa_tra_cuu]
-                                    
-                                cols_to_show = [col for col in selected_cols if col in df_hien_thi.columns]
-                                df_hien_thi_final = df_hien_thi[cols_to_show].copy()
-                                df_hien_thi_final.insert(0, 'TT', range(1, len(df_hien_thi_final) + 1))
-                                
-                                st.dataframe(df_hien_thi_final, use_container_width=True, hide_index=True)
-                            else:
-                                st.success("Tuyệt vời! Không có tàu nào bị hết hạn trong danh sách bạn vừa lọc.")
 
-                            st.markdown("---")
-                            
-                            # =======================================================
-                            # NÚT TẢI XUỐNG
-                            # =======================================================
+                            # Tạo sẵn file Excel ảo
                             output = io.BytesIO()
                             with pd.ExcelWriter(output, engine='openpyxl') as writer:
                                 style_excel(writer, df_final, df_thong_ke)
-                            
                             processed_data = output.getvalue()
                             
                             now_str = datetime.now().strftime("%d%m%Y_%Hh%Mm")
@@ -310,17 +262,77 @@ with tab1:
                             if selected_date != "": base_name += f"_Han_{selected_date.replace('/', '')}"
                             final_file_name = f"{base_name}_NHVN_{now_str}.xlsx"
 
-                            st.success("✅ Dữ liệu đã sẵn sàng! Vui lòng tải file Excel hoàn chỉnh ở nút bên dưới.")
+                            # ---> LƯU TẤT CẢ VÀO "KÉT SẮT" CỦA WEB <---
+                            st.session_state['t1_processed'] = True
+                            st.session_state['t1_df_thong_ke'] = df_thong_ke
+                            st.session_state['t1_df_thong_ke_hienthi'] = df_thong_ke_hienthi
+                            st.session_state['t1_df_het_han'] = df_het_han
+                            st.session_state['t1_tong_cong_row'] = tong_cong_row
+                            st.session_state['t1_processed_data'] = processed_data
+                            st.session_state['t1_final_file_name'] = final_file_name
+                            st.session_state['t1_selected_cols'] = selected_cols
                             
-                            st.download_button(
-                                label="📥 TẢI XUỐNG FILE EXCEL ĐÃ TRANG TRÍ",
-                                data=processed_data,
-                                file_name=final_file_name,
-                                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                                type="primary"
-                            )
                     except Exception as e:
                         st.error(f"Lỗi hệ thống: {e}")
+
+            # --- MỞ KÉT SẮT ĐỂ HIỂN THỊ GIAO DIỆN (Độc lập với nút bấm) ---
+            if st.session_state.get('t1_processed', False):
+                # Lấy dữ liệu từ két ra
+                df_thong_ke = st.session_state['t1_df_thong_ke']
+                df_thong_ke_hienthi = st.session_state['t1_df_thong_ke_hienthi']
+                df_het_han = st.session_state['t1_df_het_han']
+                tong_cong_row = st.session_state['t1_tong_cong_row']
+                processed_data = st.session_state['t1_processed_data']
+                final_file_name = st.session_state['t1_final_file_name']
+                t1_selected_cols = st.session_state['t1_selected_cols']
+
+                st.markdown("---")
+                st.header("📈 BÁO CÁO KẾT QUẢ THỐNG KÊ")
+                
+                m1, m2 = st.columns(2)
+                m1.metric(label="📌 Tổng số Tàu cá lọc được", value=f"{tong_cong_row['Tổng số tàu']} tàu")
+                m2.metric(label="⚠️ Số tàu ĐÃ HẾT HẠN", value=f"{tong_cong_row['Tàu hết hạn']} tàu", delta="Cần chú ý", delta_color="inverse")
+                
+                st.write("") 
+                
+                col_chart, col_table = st.columns([1, 1])
+                with col_chart:
+                    st.markdown("**Biểu đồ Tàu cá theo Địa phương**")
+                    if len(df_thong_ke_hienthi) > 0:
+                        st.bar_chart(data=df_thong_ke_hienthi, x='Xã/Phường (Địa chỉ mới)', y=['Tổng số tàu', 'Tàu hết hạn'])
+                with col_table:
+                    st.markdown("**Bảng Thống kê chi tiết**")
+                    st.dataframe(df_thong_ke, use_container_width=True, hide_index=True)
+                
+                st.markdown("---")
+                st.subheader("⚠️ TRA CỨU DANH SÁCH TÀU HẾT HẠN")
+                
+                if len(df_het_han) > 0:
+                    danh_sach_xa_het_han = ["Tất cả"] + sorted(df_het_han['Địa chỉ mới (Tạo tự động)'].dropna().unique().tolist())
+                    xa_tra_cuu = st.selectbox("Lựa chọn Xã/Phường để xem chi tiết tàu hết hạn:", danh_sach_xa_het_han)
+                    
+                    if xa_tra_cuu == "Tất cả":
+                        df_hien_thi = df_het_han
+                    else:
+                        df_hien_thi = df_het_han[df_het_han['Địa chỉ mới (Tạo tự động)'] == xa_tra_cuu]
+                        
+                    cols_to_show = [col for col in t1_selected_cols if col in df_hien_thi.columns]
+                    df_hien_thi_final = df_hien_thi[cols_to_show].copy()
+                    df_hien_thi_final.insert(0, 'TT', range(1, len(df_hien_thi_final) + 1))
+                    
+                    st.dataframe(df_hien_thi_final, use_container_width=True, hide_index=True)
+                else:
+                    st.success("Tuyệt vời! Không có tàu nào bị hết hạn trong danh sách bạn vừa lọc.")
+
+                st.markdown("---")
+                st.success("✅ Dữ liệu đã sẵn sàng! Vui lòng tải file Excel hoàn chỉnh ở nút bên dưới.")
+                st.download_button(
+                    label="📥 TẢI XUỐNG FILE EXCEL ĐÃ TRANG TRÍ",
+                    data=processed_data,
+                    file_name=final_file_name,
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    type="primary"
+                )
 
 # ---------------------------------------------------------
 # TAB 2: ĐỐI CHIẾU DỮ LIỆU
@@ -377,15 +389,6 @@ with tab2:
                         df_merged = pd.merge(df_src, df_tgt_sub, on='_key_match', how='left')
                         df_merged.drop(columns=['_key_match'], inplace=True)
                         
-                        st.markdown("---")
-                        st.header("👀 KẾT QUẢ ĐỐI CHIẾU")
-                        st.success(f"🎉 Đã tìm thấy và đắp thêm dữ liệu. Tổng số dòng: {len(df_merged)}")
-                        
-                        with st.expander("🔎 Bấm vào đây để Xem trước File kết quả"):
-                            st.dataframe(df_merged.head(50), use_container_width=True, hide_index=True)
-                            
-                        st.markdown("---")
-                        
                         output = io.BytesIO()
                         df_merged.to_excel(output, index=False)
                         processed_data = output.getvalue()
@@ -393,12 +396,33 @@ with tab2:
                         now_str = datetime.now().strftime("%d%m%Y_%Hh%Mm")
                         out_name = f'Ket_qua_Doi_chieu_{now_str}.xlsx'
                         
-                        st.download_button(
-                            label="📥 TẢI XUỐNG FILE KẾT QUẢ",
-                            data=processed_data,
-                            file_name=out_name,
-                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                            type="primary"
-                        )
+                        # ---> LƯU VÀO KÉT SẮT <---
+                        st.session_state['t2_processed'] = True
+                        st.session_state['t2_df_merged'] = df_merged
+                        st.session_state['t2_processed_data'] = processed_data
+                        st.session_state['t2_out_name'] = out_name
+                        
                     except Exception as e:
                         st.error(f"Lỗi hệ thống: {e}")
+
+        # --- MỞ KÉT SẮT TAB 2 ĐỂ HIỂN THỊ ---
+        if st.session_state.get('t2_processed', False):
+            df_merged = st.session_state['t2_df_merged']
+            processed_data = st.session_state['t2_processed_data']
+            out_name = st.session_state['t2_out_name']
+
+            st.markdown("---")
+            st.header("👀 KẾT QUẢ ĐỐI CHIẾU")
+            st.success(f"🎉 Đã tìm thấy và đắp thêm dữ liệu. Tổng số dòng: {len(df_merged)}")
+            
+            with st.expander("🔎 Bấm vào đây để Xem trước File kết quả"):
+                st.dataframe(df_merged.head(50), use_container_width=True, hide_index=True)
+                
+            st.markdown("---")
+            st.download_button(
+                label="📥 TẢI XUỐNG FILE KẾT QUẢ",
+                data=processed_data,
+                file_name=out_name,
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                type="primary"
+            )
