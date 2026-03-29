@@ -128,7 +128,7 @@ def style_excel(writer, df_final, df_thong_ke):
 # =========================================================
 # GIAO DIỆN WEB
 # =========================================================
-st.title("🚢 HỆ THỐNG QUẢN LÝ VÀ PHÂN TÍCH DỮ LIỆU TÀU CÁ NINH HOÀ_VẠN NINH - CODER LÊ HIẾU")
+st.title("🚢 HỆ THỐNG PHÂN TÍCH DỮ LIỆU TÀU CÁ NINH HOÀ_VẠN NINH")
 st.markdown("---")
 
 tab1, tab2 = st.tabs(["📊 LỌC & THỐNG KÊ DANH SÁCH", "🔄 ĐỐI CHIẾU DỮ LIỆU"])
