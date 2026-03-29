@@ -37,13 +37,6 @@ mapping_rules = {
     "Bắc Nha Trang": {"keywords": ["lương sơn", "vĩnh lương", "văn đăng", "cát lợi", "võ tánh", "phạm văn đồng"], "exclude": ["ninh hòa", "ninh hoà", "vạn ninh", "cam ranh", "diên khánh", "cam lâm"]}
 }
 
-# --- CÁC HÀM XÓA BỘ NHỚ ĐỆM (CACHE) ĐỂ TRÁNH LỖI HIỂN THỊ DỮ LIỆU CŨ ---
-if 't1_processed' not in st.session_state: st.session_state['t1_processed'] = False
-if 't2_processed' not in st.session_state: st.session_state['t2_processed'] = False
-
-def clear_t1_cache(): st.session_state['t1_processed'] = False
-def clear_t2_cache(): st.session_state['t2_processed'] = False
-
 # =========================================================
 # HÀM BỔ TRỢ CHUNG
 # =========================================================
@@ -154,7 +147,7 @@ tab1, tab2 = st.tabs(["📊 LỌC & THỐNG KÊ DANH SÁCH", "🔄 ĐỐI CHIẾ
 # ---------------------------------------------------------
 with tab1:
     st.header("1. Dữ liệu đầu vào")
-    uploaded_file_t1 = st.file_uploader("Tải lên File Excel gốc", type=['xlsx', 'xls'], key="file_t1", on_change=clear_t1_cache)
+    uploaded_file_t1 = st.file_uploader("Tải lên File Excel gốc", type=['xlsx', 'xls'], key="file_t1")
     
     if uploaded_file_t1 is not None:
         cols_t1, hdr_idx_t1, std_to_original_t1 = find_true_header_and_cols(uploaded_file_t1)
@@ -166,9 +159,9 @@ with tab1:
             col1, col2 = st.columns(2)
             with col1:
                 danh_sach_xa = ["Tất cả", "Xã Đại Lãnh", "Xã Tu Bông", "Xã Vạn Hưng", "Xã Vạn Ninh", "Xã Vạn Thắng", "Phường Đông Ninh Hoà", "Phường Hoà Thắng", "Xã Bắc Ninh Hoà", "Xã Nam Ninh Hoà", "Bắc Nha Trang"]
-                selected_commune = st.selectbox("Chọn Địa phương:", danh_sach_xa, on_change=clear_t1_cache)
+                selected_commune = st.selectbox("Chọn Địa phương:", danh_sach_xa, key="sel_commune_t1")
             with col2:
-                selected_date = st.text_input("Hạn GPKTTS/Đăng kiểm (Ví dụ: 30/06/2026. Để trống lấy tất cả):", on_change=clear_t1_cache)
+                selected_date = st.text_input("Hạn GPKTTS/Đăng kiểm (Ví dụ: 30/06/2026. Để trống lấy tất cả):", key="sel_date_t1")
             
             default_cols = list(std_to_original_t1.values())
             all_cols_options = ["Địa chỉ mới (Tạo tự động)"] + cols_t1
@@ -178,7 +171,7 @@ with tab1:
                 "Chọn Cột muốn xuất báo cáo (Thứ tự trên file Excel = Thứ tự bạn click chọn):",
                 options=all_cols_options,
                 default=default_cols_options,
-                on_change=clear_t1_cache
+                key="sel_cols_t1"
             )
             
             if st.button("🚀 BẮT ĐẦU XỬ LÝ & TẠO BÁO CÁO", use_container_width=True, type="primary"):
@@ -199,12 +192,11 @@ with tab1:
                         if selected_commune != "Tất cả":
                             df_filtered = df_filtered[df_filtered['Địa chỉ mới (Tạo tự động)'] == selected_commune]
 
-                        # --- XỬ LÝ NÂNG CAO NGÀY THÁNG (FIX LỖI 1926) ---
+                        # Fix lỗi đọc nhầm năm 1926
                         if 'NGAY_HET_HAN' in std_to_original_t1:
                             col_ngay_het_han = std_to_original_t1['NGAY_HET_HAN']
                             parsed_dates = pd.to_datetime(df_filtered[col_ngay_het_han], dayfirst=True, errors='coerce')
                             
-                            # Nếu AI nhận nhầm năm 26 thành 1926, ép nó cộng thêm 100 năm thành 2026
                             mask_old = (parsed_dates.dt.year < 1950) & parsed_dates.notna()
                             if mask_old.any():
                                 parsed_dates.loc[mask_old] = parsed_dates.loc[mask_old].apply(lambda x: x.replace(year=x.year + 100))
@@ -225,7 +217,6 @@ with tab1:
                             df_final = pd.DataFrame(final_dict)
                             df_final.insert(0, 'TT', range(1, len(df_final) + 1))
 
-                            # Xác định tàu Hết hạn so với HÔM NAY
                             current_date = pd.Timestamp.now().normalize()
                             if 'NGAY_HET_HAN' in std_to_original_t1: 
                                 df_filtered['_da_het_han'] = df_filtered['Ngày_dt_temp'] < current_date
@@ -267,7 +258,7 @@ with tab1:
                             df_thong_ke_hienthi = df_thong_ke.copy()
                             df_thong_ke = pd.concat([df_thong_ke, pd.DataFrame([tong_cong_row])], ignore_index=True)
 
-                            # Rút trích CHÍNH XÁC danh sách tàu đã hết hạn
+                            # Lọc tàu hết hạn chuẩn 100%
                             df_het_han = df_filtered[df_filtered['_da_het_han'] == True].copy()
 
                             output = io.BytesIO()
@@ -280,7 +271,6 @@ with tab1:
                             if selected_date != "": base_name += f"_Han_{selected_date.replace('/', '')}"
                             final_file_name = f"{base_name}_NHVN_{now_str}.xlsx"
 
-                            # ĐƯA VÀO KÉT SẮT
                             st.session_state['t1_processed'] = True
                             st.session_state['t1_df_thong_ke'] = df_thong_ke
                             st.session_state['t1_df_thong_ke_hienthi'] = df_thong_ke_hienthi
@@ -294,7 +284,7 @@ with tab1:
                     except Exception as e:
                         st.error(f"Lỗi hệ thống: {e}")
 
-            # --- MỞ KÉT SẮT ĐỂ HIỂN THỊ GIAO DIỆN TỰ ĐỘNG ---
+            # --- MỞ KÉT SẮT HIỂN THỊ KẾT QUẢ ---
             if st.session_state.get('t1_processed', False):
                 df_thong_ke = st.session_state['t1_df_thong_ke']
                 df_thong_ke_hienthi = st.session_state['t1_df_thong_ke_hienthi']
@@ -328,14 +318,13 @@ with tab1:
                 
                 if len(df_het_han) > 0:
                     danh_sach_xa_het_han = ["Tất cả"] + sorted(df_het_han['Địa chỉ mới (Tạo tự động)'].dropna().unique().tolist())
-                    xa_tra_cuu = st.selectbox("Lựa chọn Xã/Phường để xem chi tiết tàu hết hạn:", danh_sach_xa_het_han)
+                    xa_tra_cuu = st.selectbox("Lựa chọn Xã/Phường để xem chi tiết tàu hết hạn:", danh_sach_xa_het_han, key="lookup_xa_t1")
                     
                     if xa_tra_cuu == "Tất cả":
                         df_hien_thi = df_het_han
                     else:
                         df_hien_thi = df_het_han[df_het_han['Địa chỉ mới (Tạo tự động)'] == xa_tra_cuu]
                         
-                    # Mẹo: Ép buộc phải hiện Cột "Ngày hết hạn" để người dùng dễ kiểm chứng
                     cols_to_show = [col for col in t1_selected_cols if col in df_hien_thi.columns]
                     if col_han_goc and col_han_goc not in cols_to_show and col_han_goc in df_hien_thi.columns:
                         cols_to_show.append(col_han_goc)
@@ -349,7 +338,7 @@ with tab1:
                     st.success("Tuyệt vời! Không có tàu nào bị hết hạn tính đến thời điểm hiện tại.")
 
                 st.markdown("---")
-                st.success("✅ Dữ liệu đã sẵn sàng! Vui lòng tải file Excel hoàn chỉnh (Gồm đầy đủ tàu) ở nút bên dưới.")
+                st.success("✅ Dữ liệu đã sẵn sàng! Vui lòng tải file Excel hoàn chỉnh ở nút bên dưới.")
                 st.download_button(
                     label="📥 TẢI XUỐNG FILE EXCEL ĐÃ TRANG TRÍ",
                     data=processed_data,
@@ -365,10 +354,10 @@ with tab2:
     col1, col2 = st.columns(2)
     with col1:
         st.header("1. File Gốc (Cần đắp thêm)")
-        file_src = st.file_uploader("Tải lên File Gốc", type=['xlsx', 'xls'], key="src_t2", on_change=clear_t2_cache)
+        file_src = st.file_uploader("Tải lên File Gốc", type=['xlsx', 'xls'], key="src_t2")
     with col2:
         st.header("2. File Đích (Lấy dữ liệu từ đây)")
-        file_tgt = st.file_uploader("Tải lên File Đích", type=['xlsx', 'xls'], key="tgt_t2", on_change=clear_t2_cache)
+        file_tgt = st.file_uploader("Tải lên File Đích", type=['xlsx', 'xls'], key="tgt_t2")
         
     if file_src and file_tgt:
         cols_src, hdr_idx_src, _ = find_true_header_and_cols(file_src)
@@ -384,11 +373,11 @@ with tab2:
             
         col_k1, col_k2 = st.columns(2)
         with col_k1:
-            key_src = st.selectbox("Cột Nối của File Gốc:", cols_src, index=guess_key(cols_src), on_change=clear_t2_cache)
+            key_src = st.selectbox("Cột Nối của File Gốc:", cols_src, index=guess_key(cols_src), key="sel_key_src_t2")
         with col_k2:
-            key_tgt = st.selectbox("Cột Nối của File Đích:", cols_tgt, index=guess_key(cols_tgt), on_change=clear_t2_cache)
+            key_tgt = st.selectbox("Cột Nối của File Đích:", cols_tgt, index=guess_key(cols_tgt), key="sel_key_tgt_t2")
             
-        vals_to_get = st.multiselect("Chọn (các) Cột ở File Đích muốn lấy sang:", cols_tgt, on_change=clear_t2_cache)
+        vals_to_get = st.multiselect("Chọn (các) Cột ở File Đích muốn lấy sang:", cols_tgt, key="sel_vals_t2")
         
         if st.button("🚀 BẮT ĐẦU ĐỐI CHIẾU & LẤY DỮ LIỆU", use_container_width=True, type="primary"):
             if not vals_to_get:
