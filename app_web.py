@@ -128,8 +128,20 @@ def style_excel(writer, df_final, df_thong_ke):
 # =========================================================
 # GIAO DIỆN WEB
 # =========================================================
-st.title("🚢 HỆ THỐNG PHÂN TÍCH DỮ LIỆU TÀU CÁ NINH HOÀ_VẠN NINH")
-st.markdown("---")
+# --- CHÈN LOGO VÀ TIÊU ĐỀ ---
+col_logo, col_title = st.columns([1, 11]) # Chia tỷ lệ màn hình để logo nằm bên trái, chữ bên phải
+with col_logo:
+    try:
+        from PIL import Image
+        logo = Image.open("logo_kiem_ngu.png")
+        st.image(logo, width=80)
+    except Exception:
+        st.write("🚢") # Nếu mất file ảnh thì hiện tạm hình con tàu
+
+with col_title:
+    st.title("HỆ THỐNG QUẢN LÝ VÀ PHÂN TÍCH DỮ LIỆU TÀU CÁ")
+
+st.markdown("---") # Đường kẻ ngang
 
 tab1, tab2 = st.tabs(["📊 LỌC & THỐNG KÊ DANH SÁCH", "🔄 ĐỐI CHIẾU DỮ LIỆU"])
 
