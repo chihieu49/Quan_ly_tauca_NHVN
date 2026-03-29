@@ -9,7 +9,7 @@ from openpyxl.styles import PatternFill, Font, Alignment, Border, Side
 # =========================================================
 st.set_page_config(page_title="Quản lý Tàu cá - Khánh Hòa", page_icon="🚢", layout="wide")
 
-# Bộ từ điển và Luật lệ (Giữ nguyên lõi AI của bạn)
+# Bộ từ điển và Luật lệ AI
 COLUMN_ALIASES = {
     'SO_DANG_KY': ['số đăng ký', 'biển số', 'số đk'],
     'CHU_TAU': ['chủ tàu', 'chủ phương tiện', 'họ tên chủ', 'tên chủ'],
@@ -128,6 +128,7 @@ def style_excel(writer, df_final, df_thong_ke):
 # =========================================================
 # GIAO DIỆN WEB
 # =========================================================
+
 # --- CHÈN LOGO VÀ TIÊU ĐỀ ---
 col_logo, col_title = st.columns([1, 11]) # Chia tỷ lệ màn hình để logo nằm bên trái, chữ bên phải
 with col_logo:
@@ -171,7 +172,7 @@ with tab1:
             default_cols_options = ["Địa chỉ mới (Tạo tự động)"] + default_cols
             
             selected_cols = st.multiselect(
-                "Chọn các Cột Báo cáo:",
+                "Chọn Cột muốn xuất báo cáo (Thứ tự trên file Excel = Thứ tự bạn click chọn):",
                 options=all_cols_options,
                 default=default_cols_options
             )
@@ -248,7 +249,7 @@ with tab1:
                                 if col != 'Xã/Phường (Địa chỉ mới)': tong_cong_row[col] = df_thong_ke[col].sum()
                             df_thong_ke = pd.concat([df_thong_ke, pd.DataFrame([tong_cong_row])], ignore_index=True)
 
-                            # --- TẠO FILE EXCEL ẢO ĐỂ TẢI XUỐNG (WEB-STYLE) ---
+                            # --- TẠO FILE EXCEL ẢO ĐỂ TẢI XUỐNG ---
                             output = io.BytesIO()
                             with pd.ExcelWriter(output, engine='openpyxl') as writer:
                                 style_excel(writer, df_final, df_thong_ke)
