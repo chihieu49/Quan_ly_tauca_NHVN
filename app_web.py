@@ -269,33 +269,80 @@ if menu == "🔍 Tra cứu thông tin":
         mtime = os.path.getmtime(DB_FILE)
         st.caption(f"Trạng thái: Đã tải {len(df_db)} tàu (Cập nhật lần cuối: {datetime.fromtimestamp(mtime).strftime('%H:%M %d/%m/%Y')})")
 
-        with st.expander("🖨️ XUẤT MÃ QR HÀNG LOẠT CHO TOÀN BỘ TÀU"):
-            st.markdown("Tính năng này sẽ tự động tạo mã QR cho toàn bộ danh sách tàu và nén thành 1 file ZIP để bạn mang đi in.")
-            if st.button("🚀 BẮT ĐẦU TẠO QR HÀNG LOẠT", type="primary"):
-                col_dk = mmap.get('SO_DANG_KY')
-                if not col_dk:
-                    st.error("Không tìm thấy cột Số đăng ký trong CSDL!")
+        # ========================================================
+        # TÍNH NĂNG TẠO MÃ QR THÔNG MINH (CHỈ TÀU MỚI)
+        # ========================================================
+        QR_LOG_FILE = "Da_Tao_QR_Log.txt" # File bí mật lưu lịch sử các tàu đã tạo mã
+
+        with st.expander("🖨️ QUẢN LÝ VÀ XUẤT MÃ QR"):
+            st.markdown("Hệ thống AI sẽ tự động so sánh CSDL hiện tại với Lịch sử xuất QR trước đó để **chỉ tạo mã cho những tàu mới**.")
+            
+            # Đọc lịch sử các tàu đã từng tạo mã
+            generated_vessels = set()
+            if os.path.exists(QR_LOG_FILE):
+                with open(QR_LOG_FILE, "r") as f:
+                    generated_vessels = set(line.strip().upper() for line in f if line.strip())
+
+            col_dk = mmap.get('SO_DANG_KY')
+            if not col_dk:
+                st.error("Không tìm thấy cột Số đăng ký trong CSDL!")
+            else:
+                # Tìm ra các tàu MỚI hoàn toàn chưa có trong lịch sử
+                all_vessels_in_db = set(df_db[col_dk].astype(str).str.strip().str.upper().dropna())
+                all_vessels_in_db.discard('NAN')
+                all_vessels_in_db.discard('NONE')
+                
+                new_vessels = all_vessels_in_db - generated_vessels
+                
+                # Hiển thị thống kê
+                c1, c2 = st.columns(2)
+                c1.info(f"📁 Tổng số tàu trong CSDL: **{len(all_vessels_in_db)}**")
+                
+                if len(new_vessels) == 0:
+                    c2.success("✅ Toàn bộ tàu trong CSDL hiện tại đều đã được tạo mã QR!")
+                    st.button("Tạo QR cho tàu mới", disabled=True, use_container_width=True)
                 else:
-                    total_vessels = len(df_db)
-                    my_bar = st.progress(0, text="Đang tạo mã QR... Vui lòng chờ.")
-                    zip_buffer = io.BytesIO()
-                    app_domain_clean = app_domain.strip().rstrip("/")
+                    c2.warning(f"⚠️ Phát hiện **{len(new_vessels)}** tàu mới chưa có mã QR!")
                     
-                    with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zip_file:
-                        for i, (idx, row) in enumerate(df_db.iterrows()):
-                            vessel_id = str(row[col_dk]).strip().upper()
-                            if vessel_id and vessel_id.lower() not in ['nan', 'none']:
+                    if st.button(f"🚀 TẠO MÃ QR CHO {len(new_vessels)} TÀU MỚI", type="primary"):
+                        my_bar = st.progress(0, text="Đang tạo mã QR cho tàu mới... Vui lòng chờ.")
+                        zip_buffer = io.BytesIO()
+                        app_domain_clean = app_domain.strip().rstrip("/")
+                        
+                        # 1. Bắt đầu tạo QR cho danh sách tàu mới
+                        with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zip_file:
+                            new_vessels_list = list(new_vessels)
+                            total_new = len(new_vessels_list)
+                            
+                            for i, vessel_id in enumerate(new_vessels_list):
                                 qr_bytes = generate_qr_code(vessel_id, app_domain_clean)
                                 zip_file.writestr(f"QR_CODE_{vessel_id}.png", qr_bytes)
-                            
-                            if i % 50 == 0 or i == total_vessels - 1:
-                                percent_complete = int((i + 1) / total_vessels * 100)
-                                my_bar.progress(percent_complete, text=f"Đã tạo {i+1}/{total_vessels} mã ({percent_complete}%)")
-                    
-                    my_bar.empty()
-                    st.success("✅ Đã tạo xong toàn bộ bộ Mã QR!")
-                    st.download_button(label="📥 TẢI FILE ZIP CHỨA TOÀN BỘ MÃ QR", data=zip_buffer.getvalue(), file_name=f"Bo_Ma_QR_TauCa_NHVN_{datetime.now().strftime('%d%m%Y')}.zip", mime="application/zip")
-        st.markdown("---")
+                                
+                                if i % 10 == 0 or i == total_new - 1:
+                                    percent_complete = int((i + 1) / total_new * 100)
+                                    my_bar.progress(percent_complete, text=f"Đã tạo {i+1}/{total_new} mã mới ({percent_complete}%)")
+                        
+                        # 2. Ghi nhận các tàu này vào lịch sử "Đã tạo"
+                        with open(QR_LOG_FILE, "a") as f:
+                            for vid in new_vessels_list:
+                                f.write(f"{vid}\n")
+                        
+                        my_bar.empty()
+                        st.success(f"✅ Đã tạo xong {len(new_vessels)} Mã QR mới!")
+                        
+                        st.download_button(
+                            label="📥 TẢI FILE ZIP CHỨA MÃ QR MỚI",
+                            data=zip_buffer.getvalue(),
+                            file_name=f"Bo_Ma_QR_TauCa_NHVN_Bo_Sung_{datetime.now().strftime('%d%m%Y')}.zip",
+                            mime="application/zip"
+                        )
+                        
+                # Tính năng Backup: Cho phép Reset lịch sử để in lại toàn bộ từ đầu
+                with st.expander("⚙️ Tùy chọn Nâng cao (Dành cho Admin)"):
+                    if st.button("🗑️ Xóa Lịch sử & In lại Toàn bộ QR từ đầu"):
+                        if os.path.exists(QR_LOG_FILE):
+                            os.remove(QR_LOG_FILE)
+                            st.rerun()
 
     col_s1, col_s2, col_s3 = st.columns([3, 1, 1])
     with col_s1: keyword = st.text_input("Nhập từ khóa:", placeholder="Số đăng ký hoặc tên chủ tàu...")
