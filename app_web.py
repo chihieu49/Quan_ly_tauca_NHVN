@@ -18,6 +18,7 @@ st.markdown("""
     .stButton>button { width: 100%; border-radius: 5px; background-color: #3498db; color: white; font-weight: bold; }
     .btn-success>button { background-color: #198754 !important; }
     .btn-warning>button { background-color: #ff9800 !important; }
+    .btn-danger>button { background-color: #dc3545 !important; }
     
     /* Box Nổi Thẻ Thông Tin Desktop */
     .vessel-card { background-color: white; border-radius: 8px; border: 1px solid #dee2e6; box-shadow: 0 4px 6px rgba(0,0,0,0.05); overflow: hidden; }
@@ -91,7 +92,7 @@ mapping_rules = {
 
 T3_COL_MAP = {
     "Số đăng ký": "SO_DANG_KY", "Tên chủ tàu": "CHU_TAU", "SĐT": "SDT", "CCCD": "CCCD",
-    "Địa chỉ": "DIA_CHI", "Lmax": "LMAX", "Công suất": "CONG_SUAT", "Hạn Đăng kiểm": "HAN_DK", "Hạn GPKTTS": "HAN_GP"
+    "Địa chỉ": "DIA_CHI", "Nghề": "NGHE", "Lmax": "LMAX", "Công suất": "CONG_SUAT", "Hạn Đăng kiểm": "HAN_DK", "Hạn GPKTTS": "HAN_GP"
 }
 
 def read_excel_auto_header(file_obj_or_path):
@@ -158,6 +159,8 @@ def load_master_db():
         return df, map_columns(df.columns)
     return None, {}
 
+def save_master_db(df):
+    df.to_excel(DB_FILE, index=False, engine='openpyxl')
 
 # =========================================================
 # CHẾ ĐỘ QUÉT MÃ QR BẰNG ĐIỆN THOẠI (OFFICER MOBILE VIEW)
@@ -215,7 +218,6 @@ if "tau" in params:
     hgp_css = "m-alert-red" if check_expired(hgp) else "m-alert-green"
     hgp_txt = "ĐÃ HẾT HẠN" if check_expired(hgp) else "ĐANG CÒN HẠN"
 
-    # LƯU Ý: TOÀN BỘ HTML BÊN DƯỚI KHÔNG CÓ KHOẢNG TRẮNG Ở ĐẦU DÒNG
     html_mobile = f"""<div class="mobile-container">
 <div class="m-header"><h4>TRUY XUẤT HỒ SƠ TÀU CÁ</h4><h1>{vessel_id}</h1><div class="m-badge">📍 {dc_hien_thi}</div></div>
 <div class="m-body">
@@ -246,12 +248,13 @@ with st.sidebar:
     app_domain = st.text_input("🌐 Tên miền Web (Dùng tạo mã QR):", value="https://quanlytaucanhvn-29032026.streamlit.app")
     
     st.markdown("---")
-    menu = st.radio("MENU CHÍNH", ["🔍 Tra cứu thông tin", "🔄 Đối chiếu dữ liệu", "📊 Lọc & Xuất báo cáo"])
+    menu = st.radio("MENU CHÍNH", ["🔍 Tra cứu thông tin", "📝 Quản lý dữ liệu", "🔄 Đối chiếu dữ liệu", "📊 Lọc & Xuất báo cáo"])
     st.markdown("---")
     st.caption("© 2026 - Chi cục Thủy sản NHVN")
 
 df_db, mmap = load_master_db()
 
+# --- TRANG 1: TRA CỨU ---
 if menu == "🔍 Tra cứu thông tin":
     st.header("TRA CỨU THÔNG TIN TÀU CÁ")
     
@@ -378,6 +381,136 @@ if menu == "🔍 Tra cứu thông tin":
                             st.info(f"Mã QR chứa đường link dẫn trực tiếp đến hồ sơ điện thoại của tàu **{s_item['Số đăng ký']}**.")
                             st.download_button("🖨️ TẢI ẢNH MÃ QR ĐỂ IN", data=qr_bytes, file_name=f"QR_CODE_{s_item['Số đăng ký']}.png", mime="image/png")
 
+# --- TRANG MỚI: QUẢN LÝ DỮ LIỆU ---
+elif menu == "📝 Quản lý dữ liệu":
+    st.header("QUẢN LÝ DỮ LIỆU TÀU CÁ")
+    
+    if df_db is None:
+        st.warning("⚠️ Máy chủ chưa có Dữ liệu. Vui lòng sang tab 'Tra cứu thông tin' để nạp file Excel trước.")
+    else:
+        col_dk = mmap.get('SO_DANG_KY', 'Số đăng ký')
+        
+        tab_edit, tab_add = st.tabs(["✏️ Cập nhật / Xóa tàu", "➕ Đăng ký tàu mới"])
+        
+        # --- TAB CẬP NHẬT / XÓA ---
+        with tab_edit:
+            st.markdown("### Chỉnh sửa hoặc Xóa hồ sơ tàu cá")
+            list_tau = df_db[col_dk].dropna().astype(str).tolist()
+            tau_selected = st.selectbox("🔍 Tìm và chọn biển số tàu cần sửa:", ["-- Chọn tàu --"] + list_tau)
+            
+            if tau_selected != "-- Chọn tàu --":
+                idx_to_edit = df_db.index[df_db[col_dk].astype(str) == tau_selected].tolist()[0]
+                row_data = df_db.loc[idx_to_edit]
+                
+                with st.form("edit_form"):
+                    c1, c2 = st.columns(2)
+                    with c1:
+                        new_ten = st.text_input("Tên chủ tàu:", value=str(row_data.get(mmap.get('CHU_TAU', ''), '')))
+                        new_cccd = st.text_input("CCCD/CMND:", value=str(row_data.get(mmap.get('CCCD', ''), '')))
+                        new_sdt = st.text_input("Số điện thoại:", value=str(row_data.get(mmap.get('SDT', ''), '')))
+                        new_dc = st.text_area("Địa chỉ:", value=str(row_data.get(mmap.get('DIA_CHI', ''), '')))
+                    with c2:
+                        new_nghe = st.text_input("Nghề khai thác:", value=str(row_data.get(mmap.get('NGHE', ''), '')))
+                        new_lmax = st.text_input("Lmax (m):", value=str(row_data.get(mmap.get('LMAX', ''), '')))
+                        new_cs = st.text_input("Công suất (KW):", value=str(row_data.get(mmap.get('CONG_SUAT', ''), '')))
+                        
+                        val_hdk = str(row_data.get(mmap.get('HAN_DK', ''), ''))
+                        val_hgp = str(row_data.get(mmap.get('HAN_GP', ''), ''))
+                        
+                        # Định dạng lại ngày tháng để đưa vào form cho đẹp
+                        if pd.notna(row_data.get(mmap.get('HAN_DK', ''))):
+                            try: val_hdk = pd.to_datetime(val_hdk, dayfirst=True).strftime('%d/%m/%Y')
+                            except: pass
+                        if pd.notna(row_data.get(mmap.get('HAN_GP', ''))):
+                            try: val_hgp = pd.to_datetime(val_hgp, dayfirst=True).strftime('%d/%m/%Y')
+                            except: pass
+                            
+                        new_hdk = st.text_input("Hạn Đăng kiểm (DD/MM/YYYY):", value=val_hdk)
+                        new_hgp = st.text_input("Hạn Giấy phép (DD/MM/YYYY):", value=val_hgp)
+                    
+                    st.markdown("---")
+                    col_btn1, col_btn2 = st.columns([1, 1])
+                    with col_btn1:
+                        st.markdown('<div class="btn-success">', unsafe_allow_html=True)
+                        btn_update = st.form_submit_button("💾 LƯU CẬP NHẬT")
+                        st.markdown('</div>', unsafe_allow_html=True)
+                    with col_btn2:
+                        st.markdown('<div class="btn-danger">', unsafe_allow_html=True)
+                        btn_delete = st.form_submit_button("🗑️ XÓA TÀU NÀY")
+                        st.markdown('</div>', unsafe_allow_html=True)
+                        
+                if btn_update:
+                    if mmap.get('CHU_TAU'): df_db.at[idx_to_edit, mmap['CHU_TAU']] = new_ten
+                    if mmap.get('CCCD'): df_db.at[idx_to_edit, mmap['CCCD']] = new_cccd
+                    if mmap.get('SDT'): df_db.at[idx_to_edit, mmap['SDT']] = new_sdt
+                    if mmap.get('DIA_CHI'): df_db.at[idx_to_edit, mmap['DIA_CHI']] = new_dc
+                    if mmap.get('NGHE'): df_db.at[idx_to_edit, mmap['NGHE']] = new_nghe
+                    if mmap.get('LMAX'): df_db.at[idx_to_edit, mmap['LMAX']] = new_lmax
+                    if mmap.get('CONG_SUAT'): df_db.at[idx_to_edit, mmap['CONG_SUAT']] = new_cs
+                    if mmap.get('HAN_DK'): df_db.at[idx_to_edit, mmap['HAN_DK']] = new_hdk
+                    if mmap.get('HAN_GP'): df_db.at[idx_to_edit, mmap['HAN_GP']] = new_hgp
+                    
+                    save_master_db(df_db)
+                    st.success(f"✅ Đã cập nhật thành công dữ liệu cho tàu {tau_selected}!")
+                    st.rerun()
+                    
+                if btn_delete:
+                    df_db = df_db.drop(idx_to_edit).reset_index(drop=True)
+                    save_master_db(df_db)
+                    st.success(f"🗑️ Đã xóa tàu {tau_selected} khỏi CSDL!")
+                    st.rerun()
+
+        # --- TAB THÊM MỚI ---
+        with tab_add:
+            st.markdown("### Thêm hồ sơ tàu mới vào CSDL")
+            with st.form("add_form"):
+                add_dk = st.text_input("Số đăng ký (Bắt buộc):*", placeholder="VD: KH-99999-TS")
+                
+                c1, c2 = st.columns(2)
+                with c1:
+                    add_ten = st.text_input("Tên chủ tàu:")
+                    add_cccd = st.text_input("CCCD/CMND:")
+                    add_sdt = st.text_input("Số điện thoại:")
+                    add_dc = st.text_area("Địa chỉ:")
+                with c2:
+                    add_nghe = st.text_input("Nghề khai thác:")
+                    add_lmax = st.text_input("Lmax (m):")
+                    add_cs = st.text_input("Công suất (KW):")
+                    add_hdk = st.text_input("Hạn Đăng kiểm (DD/MM/YYYY):")
+                    add_hgp = st.text_input("Hạn Giấy phép (DD/MM/YYYY):")
+                
+                st.markdown('<div class="btn-success">', unsafe_allow_html=True)
+                btn_add = st.form_submit_button("➕ THÊM TÀU VÀO CSDL")
+                st.markdown('</div>', unsafe_allow_html=True)
+                
+            if btn_add:
+                if not add_dk.strip():
+                    st.error("❌ Số đăng ký không được để trống!")
+                elif add_dk.strip().upper() in df_db[col_dk].astype(str).str.upper().values:
+                    st.error("❌ Số đăng ký này đã tồn tại trong hệ thống!")
+                else:
+                    new_row = {}
+                    # Khởi tạo các cột bằng rỗng
+                    for col in df_db.columns: new_row[col] = ""
+                    
+                    # Điền dữ liệu vào các cột chuẩn
+                    new_row[col_dk] = add_dk.strip().upper()
+                    if mmap.get('CHU_TAU'): new_row[mmap['CHU_TAU']] = add_ten
+                    if mmap.get('CCCD'): new_row[mmap['CCCD']] = add_cccd
+                    if mmap.get('SDT'): new_row[mmap['SDT']] = add_sdt
+                    if mmap.get('DIA_CHI'): new_row[mmap['DIA_CHI']] = add_dc
+                    if mmap.get('NGHE'): new_row[mmap['NGHE']] = add_nghe
+                    if mmap.get('LMAX'): new_row[mmap['LMAX']] = add_lmax
+                    if mmap.get('CONG_SUAT'): new_row[mmap['CONG_SUAT']] = add_cs
+                    if mmap.get('HAN_DK'): new_row[mmap['HAN_DK']] = add_hdk
+                    if mmap.get('HAN_GP'): new_row[mmap['HAN_GP']] = add_hgp
+                    
+                    df_db = pd.concat([df_db, pd.DataFrame([new_row])], ignore_index=True)
+                    save_master_db(df_db)
+                    st.success(f"✅ Đã thêm tàu mới {add_dk.strip().upper()} thành công!")
+                    st.rerun()
+
+# --- TRANG 3: ĐỐI CHIẾU ---
 elif menu == "🔄 Đối chiếu dữ liệu":
     st.header("ĐỐI CHIẾU VÀ ĐẮP DỮ LIỆU")
     st.markdown("---")
@@ -434,6 +567,7 @@ elif menu == "🔄 Đối chiếu dữ liệu":
                     st.download_button("📥 TẢI FILE KẾT QUẢ", data=output.getvalue(), file_name=f"Ket_qua_Doi_chieu_{datetime.now().strftime('%d%m%Y_%H%M')}.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
         st.markdown('</div>', unsafe_allow_html=True)
 
+# --- TRANG 4: LỌC DỮ LIỆU ---
 elif menu == "📊 Lọc & Xuất báo cáo":
     st.header("LỌC DỮ LIỆU & XUẤT BÁO CÁO")
     upload_filter = st.file_uploader("1. Tải lên File Dữ liệu cần lọc", type=["xlsx", "xls"], key="filter_upload")
