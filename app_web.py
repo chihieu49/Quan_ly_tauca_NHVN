@@ -19,6 +19,22 @@ st.markdown("""
     .btn-warning>button { background-color: #ff9800 !important; }
     .btn-danger>button { background-color: #dc3545 !important; }
     
+    /* Box Nổi Thẻ Thông Tin Desktop */
+    .vessel-card { background-color: white; border-radius: 8px; border: 1px solid #dee2e6; box-shadow: 0 4px 6px rgba(0,0,0,0.05); overflow: hidden; }
+    .card-header { background-color: #0d6efd; color: white; padding: 20px; }
+    .card-header h4 { color: white; margin: 0; font-size: 14px; font-weight: bold; }
+    .card-header h2 { color: white; margin: 5px 0 10px 0; font-size: 28px; font-weight: bold; }
+    .badge-loc { background-color: white; color: #212529; padding: 5px 12px; border-radius: 15px; font-size: 12px; font-weight: bold; display: inline-block; }
+    .card-body { padding: 20px; }
+    .info-row { display: grid; grid-template-columns: 1fr 1fr; border-bottom: 1px solid #f8f9fa; padding-bottom: 10px; margin-bottom: 10px; }
+    .info-label { color: #6c757d; font-size: 13px; font-weight: bold; margin-bottom: 2px; }
+    .info-val { color: #212529; font-size: 15px; font-weight: bold; word-wrap: break-word; white-space: normal; }
+    .date-box { background-color: #f8f9fa; border: 1px solid #dee2e6; border-radius: 5px; padding: 12px 15px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+    .date-label { color: #6c757d; font-size: 13px; font-weight: bold; margin: 0; }
+    .date-val { font-size: 14px; font-weight: bold; margin: 0; }
+    .val-valid { color: #198754; }
+    .val-expired { color: #dc3545; }
+    
     /* Giao diện Mobile cho Cán bộ tuần tra */
     .mobile-container { max-width: 480px; margin: 0 auto; background: white; border-radius: 20px; box-shadow: 0 10px 25px rgba(0,0,0,0.15); overflow: hidden; font-family: sans-serif; border: 1px solid #e9ecef;}
     .m-header { background: linear-gradient(135deg, #0d6efd, #0a58ca); color: white; padding: 25px 20px; text-align: center; }
@@ -74,6 +90,11 @@ mapping_rules = {
     "Xã Bắc Ninh Hoà": {"keywords": ["ninh an", "ninh sơn", "ninh thọ", "bắc ninh hòa", "bắc ninh hoà"], "exclude": KH_EXCLUDES},
     "Xã Nam Ninh Hoà": {"keywords": ["ninh lộc", "ninh ích", "ninh hưng", "ninh tân", "nam ninh hòa", "nam ninh hoà"], "exclude": KH_EXCLUDES},
     "Bắc Nha Trang": {"keywords": ["lương sơn", "vĩnh lương", "văn đăng", "cát lợi", "võ tánh", "phạm văn đồng"], "exclude": ["ninh hòa", "ninh hoà", "vạn ninh", "cam ranh", "diên khánh", "cam lâm"]}
+}
+
+T3_COL_MAP = {
+    "Số đăng ký": "SO_DANG_KY", "Tên chủ tàu": "CHU_TAU", "SĐT": "SDT", "CCCD": "CCCD",
+    "Địa chỉ": "DIA_CHI", "Lmax": "LMAX", "Công suất": "CONG_SUAT", "Hạn Đăng kiểm": "HAN_DK", "Hạn GPKTTS": "HAN_GP"
 }
 
 def read_excel_auto_header(file_obj_or_path):
@@ -227,20 +248,111 @@ with st.sidebar:
     app_domain = st.text_input("🌐 Tên miền Web (Dùng tạo mã QR):", value="https://quanlytaucanhvn-29032026.streamlit.app")
     
     st.markdown("---")
-    menu = st.radio("MENU CHÍNH", ["⚙️ Quản lý Dữ liệu & Mã QR", "🔄 Đối chiếu dữ liệu", "📊 Lọc & Xuất báo cáo"])
+    # PHÂN CHIA 4 TAB RÕ RÀNG VÀ KHOA HỌC
+    menu = st.radio("MENU CHÍNH", ["🔍 Tra cứu thông tin", "⚙️ Quản lý Hệ thống & QR", "🔄 Đối chiếu dữ liệu", "📊 Lọc & Xuất báo cáo"])
     st.markdown("---")
     st.caption("© 2026 - Chi cục Thủy sản NHVN")
 
 df_db, mmap = load_master_db()
 
 # ---------------------------------------------------------
-# TAB 1: QUẢN LÝ DỮ LIỆU & TẠO MÃ QR THÔNG MINH
+# TAB 1: TÌM KIẾM VÀ XEM HỒ SƠ TÀU
 # ---------------------------------------------------------
-if menu == "⚙️ Quản lý Dữ liệu & Mã QR":
-    st.header("⚙️ QUẢN LÝ CƠ SỞ DỮ LIỆU & MÃ QR")
+if menu == "🔍 Tra cứu thông tin":
+    st.header("🔍 TRA CỨU THÔNG TIN TÀU CÁ")
     
-    # 1. Khung Nạp CSDL
-    with st.expander("📁 1. NẠP & CẬP NHẬT CƠ SỞ DỮ LIỆU", expanded=(df_db is None)):
+    if df_db is None:
+        st.warning("⚠️ Cơ sở dữ liệu đang trống. Vui lòng sang tab **⚙️ Quản lý Hệ thống & QR** để nạp dữ liệu trước khi tra cứu.")
+    else:
+        col_s1, col_s2, col_s3 = st.columns([3, 1, 1])
+        with col_s1: keyword = st.text_input("Nhập từ khóa:", placeholder="Số đăng ký hoặc tên chủ tàu...")
+        with col_s2: search_type = st.selectbox("Tìm theo", ["Tất cả", "Số đăng ký", "Tên chủ tàu"])
+        with col_s3: 
+            st.write("##"); btn_search = st.button("🔍 TÌM KIẾM")
+
+        if btn_search or keyword:
+            col_dk = mmap.get('SO_DANG_KY')
+            col_ten = mmap.get('CHU_TAU')
+            
+            if search_type == "Số đăng ký" and col_dk: res = df_db[df_db[col_dk].astype(str).str.lower().str.contains(keyword.lower(), na=False)]
+            elif search_type == "Tên chủ tàu" and col_ten: res = df_db[df_db[col_ten].astype(str).str.lower().str.contains(keyword.lower(), na=False)]
+            else:
+                mask = df_db.apply(lambda row: row.astype(str).str.lower().str.contains(keyword.lower(), na=False).any(), axis=1)
+                res = df_db[mask]
+
+            if res.empty: 
+                st.info(f"Không tìm thấy kết quả cho: '{keyword}'")
+            else:
+                left_col, right_col = st.columns([1.2, 1])
+                
+                with left_col:
+                    st.markdown("**DANH SÁCH KẾT QUẢ**")
+                    disp_data = []
+                    for idx, row in res.iterrows():
+                        item = {}
+                        for title, alias in T3_COL_MAP.items():
+                            orig_c = mmap.get(alias)
+                            val = row[orig_c] if orig_c and orig_c in res.columns else None
+                            if pd.notna(val) and not isinstance(val, (datetime, pd.Timestamp)) and alias not in ['SDT', 'CCCD', 'HAN_GP', 'HAN_DK']:
+                                if str(val).endswith('.0'): val = str(val)[:-2]
+                            if alias == 'CCCD' and pd.notna(val):
+                                v_str = str(val).strip().split('.')[0]
+                                if v_str.isdigit(): val = v_str.zfill(12)
+                            elif alias == 'SDT' and pd.notna(val):
+                                v_str = str(val).strip().split('.')[0]
+                                if v_str.isdigit() and len(v_str) >= 9 and v_str[0] != '0': val = '0' + v_str
+                            elif alias in ['HAN_GP', 'HAN_DK'] and pd.notna(val):
+                                try:
+                                    parsed = pd.to_datetime(val, errors='coerce', dayfirst=True)
+                                    val = parsed.strftime('%d/%m/%Y') if pd.notna(parsed) else str(val).split(' ')[0].strip()
+                                except: pass
+                            item[title] = str(val) if pd.notna(val) else "-"
+                        dc_col = mmap.get('DIA_CHI')
+                        item['Địa phương'] = get_new_address(row[dc_col]) if dc_col and dc_col in res.columns else "-"
+                        disp_data.append(item)
+                    
+                    df_display = pd.DataFrame(disp_data)
+                    selected_vessel = st.selectbox("Chọn tàu để xem chi tiết:", df_display['Số đăng ký'].tolist())
+                    st.dataframe(df_display, use_container_width=True, hide_index=True)
+
+                with right_col:
+                    st.markdown("**THẺ CHI TIẾT & MÃ QR**")
+                    if selected_vessel:
+                        s_item = df_display[df_display['Số đăng ký'] == selected_vessel].iloc[0]
+                        loc_str = s_item['Địa phương'] if s_item['Địa phương'] != "-" else "CHƯA XÁC ĐỊNH"
+                        
+                        html_card = f"""<div class="vessel-card">
+<div class="card-header"><h4>CHI TIẾT TÀU CÁ</h4><h2>{s_item['Số đăng ký']}</h2><span class="badge-loc">{loc_str}</span></div>
+<div class="card-body">
+<div class="info-row"><div><p class="info-label">👤 CHỦ PHƯƠNG TIỆN</p><p class="info-val">{s_item['Tên chủ tàu']}</p></div>
+<div><p class="info-label">💳 SỐ CCCD</p><p class="info-val">{s_item['CCCD']}</p></div></div>
+<div class="info-row"><div><p class="info-label">📞 SỐ ĐIỆN THOẠI</p><p class="info-val">{s_item['SĐT']}</p></div>
+<div><p class="info-label">📏 LMAX</p><p class="info-val">{s_item['Lmax']} m</p></div></div>
+<div class="info-row" style="border-bottom:none;"><div><p class="info-label">⚡ CÔNG SUẤT</p><p class="info-val">{s_item['Công suất']} KW</p></div>
+<div><p class="info-label">📍 ĐỊA CHỈ</p><p class="info-val">{s_item['Địa chỉ']}</p></div></div>
+<div style="margin-top:20px;">
+<div class="date-box"><p class="date-label">🗓 HẠN GIẤY PHÉP KTTS</p><p class="date-val {'val-expired' if check_expired(s_item['Hạn GPKTTS']) else 'val-valid'}">{s_item['Hạn GPKTTS']}</p></div>
+<div class="date-box"><p class="date-label">🗓 HẠN ĐĂNG KIỂM</p><p class="date-val {'val-expired' if check_expired(s_item['Hạn Đăng kiểm']) else 'val-valid'}">{s_item['Hạn Đăng kiểm']}</p></div>
+</div></div></div>"""
+                        st.markdown(html_card, unsafe_allow_html=True)
+                        
+                        st.markdown("---")
+                        app_domain_clean = app_domain.strip().rstrip("/")
+                        qr_bytes = generate_qr_code(s_item['Số đăng ký'], app_domain_clean)
+                        
+                        col_qr1, col_qr2 = st.columns([1, 2])
+                        with col_qr1: st.image(qr_bytes, use_container_width=True)
+                        with col_qr2:
+                            st.info(f"Mã QR cấp riêng cho tàu **{s_item['Số đăng ký']}**.")
+                            st.download_button("🖨️ TẢI ẢNH MÃ QR ĐỂ IN", data=qr_bytes, file_name=f"QR_CODE_{s_item['Số đăng ký']}.png", mime="image/png")
+
+# ---------------------------------------------------------
+# TAB 2: QUẢN LÝ DỮ LIỆU & TẠO MÃ QR HÀNG LOẠT
+# ---------------------------------------------------------
+elif menu == "⚙️ Quản lý Hệ thống & QR":
+    st.header("⚙️ QUẢN LÝ CƠ SỞ DỮ LIỆU & XUẤT QR HÀNG LOẠT")
+    
+    with st.expander("📁 1. NẠP & CẬP NHẬT CƠ SỞ DỮ LIỆU GỐC", expanded=(df_db is None)):
         st.markdown("Tải lên file Excel danh sách tàu cá mới nhất. Hệ thống sẽ tự động lưu lại để cán bộ quét mã QR có thể truy xuất.")
         uploaded_db = st.file_uploader("Chọn file Excel CSDL", type=["xlsx", "xls"])
         if uploaded_db:
@@ -248,7 +360,6 @@ if menu == "⚙️ Quản lý Dữ liệu & Mã QR":
             st.success("✅ Đã cập nhật CSDL lên máy chủ thành công!")
             st.rerun()
 
-    # 2. Khung Quản lý & Xuất QR
     if df_db is not None:
         mtime = os.path.getmtime(DB_FILE)
         st.info(f"📊 **Trạng thái CSDL:** Đang lưu trữ **{len(df_db)}** tàu. *(Cập nhật lần cuối: {datetime.fromtimestamp(mtime).strftime('%H:%M %d/%m/%Y')})*")
@@ -315,7 +426,7 @@ if menu == "⚙️ Quản lý Dữ liệu & Mã QR":
         st.markdown("</div>", unsafe_allow_html=True)
         
         with st.expander("⚙️ Tùy chọn Nâng cao (Xóa lịch sử in ấn)"):
-            st.markdown("Nếu bạn bị mất file ZIP lưu trữ cũ và muốn hệ thống 'quên' lịch sử để **in lại toàn bộ 5.100 mã QR từ đầu**, hãy bấm nút bên dưới.")
+            st.markdown("Nếu bạn bị mất file ZIP lưu trữ cũ và muốn hệ thống 'quên' lịch sử để **in lại toàn bộ các mã QR từ đầu**, hãy bấm nút bên dưới.")
             st.markdown('<div class="btn-danger">', unsafe_allow_html=True)
             if st.button("🗑️ XÓA LỊCH SỬ & IN LẠI TOÀN BỘ"):
                 if os.path.exists(QR_LOG_FILE):
@@ -326,7 +437,7 @@ if menu == "⚙️ Quản lý Dữ liệu & Mã QR":
             st.markdown('</div>', unsafe_allow_html=True)
 
 # ---------------------------------------------------------
-# TAB 2: ĐỐI CHIẾU DỮ LIỆU
+# TAB 3: ĐỐI CHIẾU DỮ LIỆU
 # ---------------------------------------------------------
 elif menu == "🔄 Đối chiếu dữ liệu":
     st.header("ĐỐI CHIẾU VÀ ĐẮP DỮ LIỆU")
@@ -385,7 +496,7 @@ elif menu == "🔄 Đối chiếu dữ liệu":
         st.markdown('</div>', unsafe_allow_html=True)
 
 # ---------------------------------------------------------
-# TAB 3: LỌC DỮ LIỆU & XUẤT BÁO CÁO
+# TAB 4: LỌC DỮ LIỆU & XUẤT BÁO CÁO
 # ---------------------------------------------------------
 elif menu == "📊 Lọc & Xuất báo cáo":
     st.header("LỌC DỮ LIỆU & XUẤT BÁO CÁO")
