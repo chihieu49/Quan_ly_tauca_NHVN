@@ -232,7 +232,7 @@ if "tau" in params:
 <div class="m-row"><span class="m-label">Nghề khai thác</span><span class="m-val">{nghe}</span></div>
 <div class="m-grid"><div class="m-row"><span class="m-label">Chiều dài Lmax</span><span class="m-val">{lmax} m</span></div><div class="m-row"><span class="m-label">Công suất máy</span><span class="m-val">{cs} KW</span></div></div></div>
 </div></div>
-<div style="text-align:center; padding: 20px; color: #adb5bd; font-size: 12px; font-family:sans-serif;">Hệ thống Demo sử dụng nội bộ Chi cục Thủy sản và Biển đảo tỉnh Khánh Hoà</div>"""
+<div style="text-align:center; padding: 20px; color: #adb5bd; font-size: 12px; font-family:sans-serif;">Cấp bởi Chi cục Thủy sản NHVN</div>"""
     st.markdown(html_mobile, unsafe_allow_html=True)
     st.stop()
 
@@ -248,7 +248,6 @@ with st.sidebar:
     app_domain = st.text_input("🌐 Tên miền Web (Dùng tạo mã QR):", value="https://quanlytaucanhvn-29032026.streamlit.app")
     
     st.markdown("---")
-    # PHÂN CHIA 4 TAB RÕ RÀNG VÀ KHOA HỌC
     menu = st.radio("MENU CHÍNH", ["🔍 Tra cứu thông tin", "⚙️ Quản lý Hệ thống & QR", "🔄 Đối chiếu dữ liệu", "📊 Lọc & Xuất báo cáo"])
     st.markdown("---")
     st.caption("© 2026 - Chi cục Thủy sản NHVN")
@@ -496,19 +495,18 @@ elif menu == "🔄 Đối chiếu dữ liệu":
         st.markdown('</div>', unsafe_allow_html=True)
 
 # ---------------------------------------------------------
-# TAB 4: LỌC DỮ LIỆU & XUẤT BÁO CÁO
+# TAB 4: LỌC DỮ LIỆU & XUẤT BÁO CÁO (LẤY TỪ MASTER DB)
 # ---------------------------------------------------------
 elif menu == "📊 Lọc & Xuất báo cáo":
-    st.header("LỌC DỮ LIỆU & XUẤT BÁO CÁO")
-    upload_filter = st.file_uploader("1. Tải lên File Dữ liệu cần lọc", type=["xlsx", "xls"], key="filter_upload")
+    st.header("📊 LỌC DỮ LIỆU & XUẤT BÁO CÁO")
     
-    if upload_filter:
-        df_raw = read_excel_auto_header(upload_filter)
+    if df_db is None:
+        st.warning("⚠️ Cơ sở dữ liệu đang trống. Vui lòng sang tab **⚙️ Quản lý Hệ thống & QR** để nạp dữ liệu trước khi lọc báo cáo.")
+    else:
+        df_raw = df_db.copy()
         all_cols = list(df_raw.columns)
-        mmap = map_columns(all_cols)
         
-        st.markdown("---")
-        st.markdown("### 2. Thiết lập xuất báo cáo")
+        st.markdown("### 1. Thiết lập xuất báo cáo")
         col_c1, col_c2 = st.columns(2)
         with col_c1:
             selected_cols = st.multiselect("Cột sẽ xuất ra báo cáo:", all_cols, default=[c for c in all_cols if c in mmap.values()])
