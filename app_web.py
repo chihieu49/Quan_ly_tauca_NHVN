@@ -5,7 +5,6 @@ import io
 import os
 import qrcode
 import zipfile
-from PIL import Image
 
 # =========================================================
 # CẤU HÌNH TRANG & GIAO DIỆN
@@ -19,22 +18,6 @@ st.markdown("""
     .btn-success>button { background-color: #198754 !important; }
     .btn-warning>button { background-color: #ff9800 !important; }
     .btn-danger>button { background-color: #dc3545 !important; }
-    
-    /* Box Nổi Thẻ Thông Tin Desktop */
-    .vessel-card { background-color: white; border-radius: 8px; border: 1px solid #dee2e6; box-shadow: 0 4px 6px rgba(0,0,0,0.05); overflow: hidden; }
-    .card-header { background-color: #0d6efd; color: white; padding: 20px; }
-    .card-header h4 { color: white; margin: 0; font-size: 14px; font-weight: bold; }
-    .card-header h2 { color: white; margin: 5px 0 10px 0; font-size: 28px; font-weight: bold; }
-    .badge-loc { background-color: white; color: #212529; padding: 5px 12px; border-radius: 15px; font-size: 12px; font-weight: bold; display: inline-block; }
-    .card-body { padding: 20px; }
-    .info-row { display: grid; grid-template-columns: 1fr 1fr; border-bottom: 1px solid #f8f9fa; padding-bottom: 10px; margin-bottom: 10px; }
-    .info-label { color: #6c757d; font-size: 13px; font-weight: bold; margin-bottom: 2px; }
-    .info-val { color: #212529; font-size: 15px; font-weight: bold; word-wrap: break-word; white-space: normal; }
-    .date-box { background-color: #f8f9fa; border: 1px solid #dee2e6; border-radius: 5px; padding: 12px 15px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
-    .date-label { color: #6c757d; font-size: 13px; font-weight: bold; margin: 0; }
-    .date-val { font-size: 14px; font-weight: bold; margin: 0; }
-    .val-valid { color: #198754; }
-    .val-expired { color: #dc3545; }
     
     /* Giao diện Mobile cho Cán bộ tuần tra */
     .mobile-container { max-width: 480px; margin: 0 auto; background: white; border-radius: 20px; box-shadow: 0 10px 25px rgba(0,0,0,0.15); overflow: hidden; font-family: sans-serif; border: 1px solid #e9ecef;}
@@ -54,6 +37,8 @@ st.markdown("""
     .m-alert-red { background-color: #f8d7da; color: #842029; border: 1px solid #f5c2c7;}
     .m-alert-title { font-size: 12px; font-weight: bold; text-transform: uppercase; margin-bottom: 5px; opacity: 0.8;}
     .m-alert-val { font-size: 18px; font-weight: 900; margin: 0;}
+    
+    .data-card { background: white; padding: 20px; border-radius: 10px; border: 1px solid #dee2e6; margin-bottom: 20px;}
     </style>
 """, unsafe_allow_html=True)
 
@@ -61,6 +46,7 @@ st.markdown("""
 # LÕI DỮ LIỆU & AI
 # =========================================================
 DB_FILE = "CSDL_TauCa_Master.xlsx"
+QR_LOG_FILE = "Da_Tao_QR_Log.txt"
 
 COLUMN_ALIASES = {
     'SO_DANG_KY': ['số đăng ký', 'biển số', 'số đk'],
@@ -88,11 +74,6 @@ mapping_rules = {
     "Xã Bắc Ninh Hoà": {"keywords": ["ninh an", "ninh sơn", "ninh thọ", "bắc ninh hòa", "bắc ninh hoà"], "exclude": KH_EXCLUDES},
     "Xã Nam Ninh Hoà": {"keywords": ["ninh lộc", "ninh ích", "ninh hưng", "ninh tân", "nam ninh hòa", "nam ninh hoà"], "exclude": KH_EXCLUDES},
     "Bắc Nha Trang": {"keywords": ["lương sơn", "vĩnh lương", "văn đăng", "cát lợi", "võ tánh", "phạm văn đồng"], "exclude": ["ninh hòa", "ninh hoà", "vạn ninh", "cam ranh", "diên khánh", "cam lâm"]}
-}
-
-T3_COL_MAP = {
-    "Số đăng ký": "SO_DANG_KY", "Tên chủ tàu": "CHU_TAU", "SĐT": "SDT", "CCCD": "CCCD",
-    "Địa chỉ": "DIA_CHI", "Nghề": "NGHE", "Lmax": "LMAX", "Công suất": "CONG_SUAT", "Hạn Đăng kiểm": "HAN_DK", "Hạn GPKTTS": "HAN_GP"
 }
 
 def read_excel_auto_header(file_obj_or_path):
@@ -159,8 +140,6 @@ def load_master_db():
         return df, map_columns(df.columns)
     return None, {}
 
-def save_master_db(df):
-    df.to_excel(DB_FILE, index=False, engine='openpyxl')
 
 # =========================================================
 # CHẾ ĐỘ QUÉT MÃ QR BẰNG ĐIỆN THOẠI (OFFICER MOBILE VIEW)
@@ -248,316 +227,107 @@ with st.sidebar:
     app_domain = st.text_input("🌐 Tên miền Web (Dùng tạo mã QR):", value="https://quanlytaucanhvn-29032026.streamlit.app")
     
     st.markdown("---")
-    menu = st.radio("MENU CHÍNH", ["🔍 Tra cứu thông tin", "📝 Quản lý dữ liệu", "🔄 Đối chiếu dữ liệu", "📊 Lọc & Xuất báo cáo"])
+    menu = st.radio("MENU CHÍNH", ["⚙️ Quản lý Dữ liệu & Mã QR", "🔄 Đối chiếu dữ liệu", "📊 Lọc & Xuất báo cáo"])
     st.markdown("---")
     st.caption("© 2026 - Chi cục Thủy sản NHVN")
 
 df_db, mmap = load_master_db()
 
-# --- TRANG 1: TRA CỨU ---
-if menu == "🔍 Tra cứu thông tin":
-    st.header("TRA CỨU THÔNG TIN TÀU CÁ")
+# ---------------------------------------------------------
+# TAB 1: QUẢN LÝ DỮ LIỆU & TẠO MÃ QR THÔNG MINH
+# ---------------------------------------------------------
+if menu == "⚙️ Quản lý Dữ liệu & Mã QR":
+    st.header("⚙️ QUẢN LÝ CƠ SỞ DỮ LIỆU & MÃ QR")
     
-    with st.expander("📁 Cập nhật Cơ sở dữ liệu (Nạp file Excel)", expanded=(df_db is None)):
-        uploaded_db = st.file_uploader("Nạp file dữ liệu mới. Máy chủ sẽ tự động lưu lại để Quét mã QR.", type=["xlsx", "xls"])
+    # 1. Khung Nạp CSDL
+    with st.expander("📁 1. NẠP & CẬP NHẬT CƠ SỞ DỮ LIỆU", expanded=(df_db is None)):
+        st.markdown("Tải lên file Excel danh sách tàu cá mới nhất. Hệ thống sẽ tự động lưu lại để cán bộ quét mã QR có thể truy xuất.")
+        uploaded_db = st.file_uploader("Chọn file Excel CSDL", type=["xlsx", "xls"])
         if uploaded_db:
             with open(DB_FILE, "wb") as f: f.write(uploaded_db.getbuffer())
             st.success("✅ Đã cập nhật CSDL lên máy chủ thành công!")
             st.rerun()
 
+    # 2. Khung Quản lý & Xuất QR
     if df_db is not None:
         mtime = os.path.getmtime(DB_FILE)
-        st.caption(f"Trạng thái: Đã tải {len(df_db)} tàu (Cập nhật lần cuối: {datetime.fromtimestamp(mtime).strftime('%H:%M %d/%m/%Y')})")
+        st.info(f"📊 **Trạng thái CSDL:** Đang lưu trữ **{len(df_db)}** tàu. *(Cập nhật lần cuối: {datetime.fromtimestamp(mtime).strftime('%H:%M %d/%m/%Y')})*")
+        
+        st.markdown("<div class='data-card'>", unsafe_allow_html=True)
+        st.markdown("### 🖨️ 2. HỆ THỐNG XUẤT MÃ QR THÔNG MINH")
+        st.markdown("Hệ thống AI tự động so sánh CSDL hiện tại với Lịch sử xuất QR trước đó để **chỉ tạo mã cho những tàu mới**.")
+        
+        generated_vessels = set()
+        if os.path.exists(QR_LOG_FILE):
+            with open(QR_LOG_FILE, "r") as f:
+                generated_vessels = set(line.strip().upper() for line in f if line.strip())
 
-        # ========================================================
-        # TÍNH NĂNG TẠO MÃ QR THÔNG MINH (CHỈ TÀU MỚI)
-        # ========================================================
-        QR_LOG_FILE = "Da_Tao_QR_Log.txt" # File bí mật lưu lịch sử các tàu đã tạo mã
-
-        with st.expander("🖨️ QUẢN LÝ VÀ XUẤT MÃ QR"):
-            st.markdown("Hệ thống AI sẽ tự động so sánh CSDL hiện tại với Lịch sử xuất QR trước đó để **chỉ tạo mã cho những tàu mới**.")
-            
-            # Đọc lịch sử các tàu đã từng tạo mã
-            generated_vessels = set()
-            if os.path.exists(QR_LOG_FILE):
-                with open(QR_LOG_FILE, "r") as f:
-                    generated_vessels = set(line.strip().upper() for line in f if line.strip())
-
-            col_dk = mmap.get('SO_DANG_KY')
-            if not col_dk:
-                st.error("Không tìm thấy cột Số đăng ký trong CSDL!")
-            else:
-                # Tìm ra các tàu MỚI hoàn toàn chưa có trong lịch sử
-                all_vessels_in_db = set(df_db[col_dk].astype(str).str.strip().str.upper().dropna())
-                all_vessels_in_db.discard('NAN')
-                all_vessels_in_db.discard('NONE')
-                
-                new_vessels = all_vessels_in_db - generated_vessels
-                
-                # Hiển thị thống kê
-                c1, c2 = st.columns(2)
-                c1.info(f"📁 Tổng số tàu trong CSDL: **{len(all_vessels_in_db)}**")
-                
-                if len(new_vessels) == 0:
-                    c2.success("✅ Toàn bộ tàu trong CSDL hiện tại đều đã được tạo mã QR!")
-                    st.button("Tạo QR cho tàu mới", disabled=True, use_container_width=True)
-                else:
-                    c2.warning(f"⚠️ Phát hiện **{len(new_vessels)}** tàu mới chưa có mã QR!")
-                    
-                    if st.button(f"🚀 TẠO MÃ QR CHO {len(new_vessels)} TÀU MỚI", type="primary"):
-                        my_bar = st.progress(0, text="Đang tạo mã QR cho tàu mới... Vui lòng chờ.")
-                        zip_buffer = io.BytesIO()
-                        app_domain_clean = app_domain.strip().rstrip("/")
-                        
-                        # 1. Bắt đầu tạo QR cho danh sách tàu mới
-                        with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zip_file:
-                            new_vessels_list = list(new_vessels)
-                            total_new = len(new_vessels_list)
-                            
-                            for i, vessel_id in enumerate(new_vessels_list):
-                                qr_bytes = generate_qr_code(vessel_id, app_domain_clean)
-                                zip_file.writestr(f"QR_CODE_{vessel_id}.png", qr_bytes)
-                                
-                                if i % 10 == 0 or i == total_new - 1:
-                                    percent_complete = int((i + 1) / total_new * 100)
-                                    my_bar.progress(percent_complete, text=f"Đã tạo {i+1}/{total_new} mã mới ({percent_complete}%)")
-                        
-                        # 2. Ghi nhận các tàu này vào lịch sử "Đã tạo"
-                        with open(QR_LOG_FILE, "a") as f:
-                            for vid in new_vessels_list:
-                                f.write(f"{vid}\n")
-                        
-                        my_bar.empty()
-                        st.success(f"✅ Đã tạo xong {len(new_vessels)} Mã QR mới!")
-                        
-                        st.download_button(
-                            label="📥 TẢI FILE ZIP CHỨA MÃ QR MỚI",
-                            data=zip_buffer.getvalue(),
-                            file_name=f"Bo_Ma_QR_TauCa_NHVN_Bo_Sung_{datetime.now().strftime('%d%m%Y')}.zip",
-                            mime="application/zip"
-                        )
-                        
-                # Tính năng Backup: Cho phép Reset lịch sử để in lại toàn bộ từ đầu
-                with st.expander("⚙️ Tùy chọn Nâng cao (Dành cho Admin)"):
-                    if st.button("🗑️ Xóa Lịch sử & In lại Toàn bộ QR từ đầu"):
-                        if os.path.exists(QR_LOG_FILE):
-                            os.remove(QR_LOG_FILE)
-                            st.rerun()
-
-    col_s1, col_s2, col_s3 = st.columns([3, 1, 1])
-    with col_s1: keyword = st.text_input("Nhập từ khóa:", placeholder="Số đăng ký hoặc tên chủ tàu...")
-    with col_s2: search_type = st.selectbox("Tìm theo", ["Tất cả", "Số đăng ký", "Tên chủ tàu"])
-    with col_s3: 
-        st.write("##"); btn_search = st.button("🔍 TÌM KIẾM")
-
-    if btn_search or keyword:
-        if df_db is None:
-            st.warning("Vui lòng Nạp file Cơ sở dữ liệu trước!")
+        col_dk = mmap.get('SO_DANG_KY')
+        if not col_dk:
+            st.error("Không tìm thấy cột Số đăng ký trong CSDL!")
         else:
-            col_dk = mmap.get('SO_DANG_KY')
-            col_ten = mmap.get('CHU_TAU')
+            all_vessels_in_db = set(df_db[col_dk].astype(str).str.strip().str.upper().dropna())
+            all_vessels_in_db.discard('NAN')
+            all_vessels_in_db.discard('NONE')
             
-            if search_type == "Số đăng ký" and col_dk: res = df_db[df_db[col_dk].astype(str).str.lower().str.contains(keyword.lower(), na=False)]
-            elif search_type == "Tên chủ tàu" and col_ten: res = df_db[df_db[col_ten].astype(str).str.lower().str.contains(keyword.lower(), na=False)]
+            new_vessels = all_vessels_in_db - generated_vessels
+            
+            c1, c2 = st.columns(2)
+            c1.success(f"🗂️ Đã cấp phát: **{len(generated_vessels)}** mã QR.")
+            
+            if len(new_vessels) == 0:
+                c2.success("✅ Toàn bộ tàu trong CSDL hiện tại đều đã được tạo mã QR!")
+                st.button("Không có tàu mới cần tạo QR", disabled=True, use_container_width=True)
             else:
-                mask = df_db.apply(lambda row: row.astype(str).str.lower().str.contains(keyword.lower(), na=False).any(), axis=1)
-                res = df_db[mask]
-
-            if res.empty: st.info(f"Không tìm thấy kết quả cho: '{keyword}'")
-            else:
-                left_col, right_col = st.columns([1.2, 1])
+                c2.warning(f"⚠️ Phát hiện **{len(new_vessels)}** tàu MỚI chưa có mã QR!")
                 
-                with left_col:
-                    st.markdown("**DANH SÁCH KẾT QUẢ**")
-                    disp_data = []
-                    for idx, row in res.iterrows():
-                        item = {}
-                        for title, alias in T3_COL_MAP.items():
-                            orig_c = mmap.get(alias)
-                            val = row[orig_c] if orig_c and orig_c in res.columns else None
-                            if pd.notna(val) and not isinstance(val, (datetime, pd.Timestamp)) and alias not in ['SDT', 'CCCD', 'HAN_GP', 'HAN_DK']:
-                                if str(val).endswith('.0'): val = str(val)[:-2]
-                            if alias == 'CCCD' and pd.notna(val):
-                                v_str = str(val).strip().split('.')[0]
-                                if v_str.isdigit(): val = v_str.zfill(12)
-                            elif alias == 'SDT' and pd.notna(val):
-                                v_str = str(val).strip().split('.')[0]
-                                if v_str.isdigit() and len(v_str) >= 9 and v_str[0] != '0': val = '0' + v_str
-                            elif alias in ['HAN_GP', 'HAN_DK'] and pd.notna(val):
-                                try:
-                                    parsed = pd.to_datetime(val, errors='coerce', dayfirst=True)
-                                    val = parsed.strftime('%d/%m/%Y') if pd.notna(parsed) else str(val).split(' ')[0].strip()
-                                except: pass
-                            item[title] = str(val) if pd.notna(val) else "-"
-                        dc_col = mmap.get('DIA_CHI')
-                        item['Địa phương'] = get_new_address(row[dc_col]) if dc_col and dc_col in res.columns else "-"
-                        disp_data.append(item)
+                if st.button(f"🚀 TẠO MÃ QR CHO {len(new_vessels)} TÀU MỚI", type="primary"):
+                    my_bar = st.progress(0, text="Đang tạo mã QR cho tàu mới... Vui lòng chờ.")
+                    zip_buffer = io.BytesIO()
+                    app_domain_clean = app_domain.strip().rstrip("/")
                     
-                    df_display = pd.DataFrame(disp_data)
-                    selected_vessel = st.selectbox("Chọn tàu để xem chi tiết:", df_display['Số đăng ký'].tolist())
-                    st.dataframe(df_display, use_container_width=True, hide_index=True)
-
-                with right_col:
-                    st.markdown("**THẺ CHI TIẾT & MÃ QR**")
-                    if selected_vessel:
-                        s_item = df_display[df_display['Số đăng ký'] == selected_vessel].iloc[0]
-                        loc_str = s_item['Địa phương'] if s_item['Địa phương'] != "-" else "CHƯA XÁC ĐỊNH"
+                    with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zip_file:
+                        new_vessels_list = list(new_vessels)
+                        total_new = len(new_vessels_list)
                         
-                        html_card = f"""<div class="vessel-card">
-<div class="card-header"><h4>CHI TIẾT TÀU CÁ</h4><h2>{s_item['Số đăng ký']}</h2><span class="badge-loc">{loc_str}</span></div>
-<div class="card-body">
-<div class="info-row"><div><p class="info-label">👤 CHỦ PHƯƠNG TIỆN</p><p class="info-val">{s_item['Tên chủ tàu']}</p></div>
-<div><p class="info-label">💳 SỐ CCCD</p><p class="info-val">{s_item['CCCD']}</p></div></div>
-<div class="info-row"><div><p class="info-label">📞 SỐ ĐIỆN THOẠI</p><p class="info-val">{s_item['SĐT']}</p></div>
-<div><p class="info-label">📏 LMAX</p><p class="info-val">{s_item['Lmax']} m</p></div></div>
-<div class="info-row" style="border-bottom:none;"><div><p class="info-label">⚡ CÔNG SUẤT</p><p class="info-val">{s_item['Công suất']} KW</p></div>
-<div><p class="info-label">📍 ĐỊA CHỈ</p><p class="info-val">{s_item['Địa chỉ']}</p></div></div>
-<div style="margin-top:20px;">
-<div class="date-box"><p class="date-label">🗓 HẠN GIẤY PHÉP KTTS</p><p class="date-val {'val-expired' if check_expired(s_item['Hạn GPKTTS']) else 'val-valid'}">{s_item['Hạn GPKTTS']}</p></div>
-<div class="date-box"><p class="date-label">🗓 HẠN ĐĂNG KIỂM</p><p class="date-val {'val-expired' if check_expired(s_item['Hạn Đăng kiểm']) else 'val-valid'}">{s_item['Hạn Đăng kiểm']}</p></div>
-</div></div></div>"""
-                        st.markdown(html_card, unsafe_allow_html=True)
-                        
-                        st.markdown("---")
-                        app_domain_clean = app_domain.strip().rstrip("/")
-                        qr_bytes = generate_qr_code(s_item['Số đăng ký'], app_domain_clean)
-                        
-                        col_qr1, col_qr2 = st.columns([1, 2])
-                        with col_qr1: st.image(qr_bytes, use_container_width=True)
-                        with col_qr2:
-                            st.info(f"Mã QR chứa đường link dẫn trực tiếp đến hồ sơ điện thoại của tàu **{s_item['Số đăng ký']}**.")
-                            st.download_button("🖨️ TẢI ẢNH MÃ QR ĐỂ IN", data=qr_bytes, file_name=f"QR_CODE_{s_item['Số đăng ký']}.png", mime="image/png")
-
-# --- TRANG MỚI: QUẢN LÝ DỮ LIỆU ---
-elif menu == "📝 Quản lý dữ liệu":
-    st.header("QUẢN LÝ DỮ LIỆU TÀU CÁ")
-    
-    if df_db is None:
-        st.warning("⚠️ Máy chủ chưa có Dữ liệu. Vui lòng sang tab 'Tra cứu thông tin' để nạp file Excel trước.")
-    else:
-        col_dk = mmap.get('SO_DANG_KY', 'Số đăng ký')
-        
-        tab_edit, tab_add = st.tabs(["✏️ Cập nhật / Xóa tàu", "➕ Đăng ký tàu mới"])
-        
-        # --- TAB CẬP NHẬT / XÓA ---
-        with tab_edit:
-            st.markdown("### Chỉnh sửa hoặc Xóa hồ sơ tàu cá")
-            list_tau = df_db[col_dk].dropna().astype(str).tolist()
-            tau_selected = st.selectbox("🔍 Tìm và chọn biển số tàu cần sửa:", ["-- Chọn tàu --"] + list_tau)
-            
-            if tau_selected != "-- Chọn tàu --":
-                idx_to_edit = df_db.index[df_db[col_dk].astype(str) == tau_selected].tolist()[0]
-                row_data = df_db.loc[idx_to_edit]
-                
-                with st.form("edit_form"):
-                    c1, c2 = st.columns(2)
-                    with c1:
-                        new_ten = st.text_input("Tên chủ tàu:", value=str(row_data.get(mmap.get('CHU_TAU', ''), '')))
-                        new_cccd = st.text_input("CCCD/CMND:", value=str(row_data.get(mmap.get('CCCD', ''), '')))
-                        new_sdt = st.text_input("Số điện thoại:", value=str(row_data.get(mmap.get('SDT', ''), '')))
-                        new_dc = st.text_area("Địa chỉ:", value=str(row_data.get(mmap.get('DIA_CHI', ''), '')))
-                    with c2:
-                        new_nghe = st.text_input("Nghề khai thác:", value=str(row_data.get(mmap.get('NGHE', ''), '')))
-                        new_lmax = st.text_input("Lmax (m):", value=str(row_data.get(mmap.get('LMAX', ''), '')))
-                        new_cs = st.text_input("Công suất (KW):", value=str(row_data.get(mmap.get('CONG_SUAT', ''), '')))
-                        
-                        val_hdk = str(row_data.get(mmap.get('HAN_DK', ''), ''))
-                        val_hgp = str(row_data.get(mmap.get('HAN_GP', ''), ''))
-                        
-                        # Định dạng lại ngày tháng để đưa vào form cho đẹp
-                        if pd.notna(row_data.get(mmap.get('HAN_DK', ''))):
-                            try: val_hdk = pd.to_datetime(val_hdk, dayfirst=True).strftime('%d/%m/%Y')
-                            except: pass
-                        if pd.notna(row_data.get(mmap.get('HAN_GP', ''))):
-                            try: val_hgp = pd.to_datetime(val_hgp, dayfirst=True).strftime('%d/%m/%Y')
-                            except: pass
+                        for i, vessel_id in enumerate(new_vessels_list):
+                            qr_bytes = generate_qr_code(vessel_id, app_domain_clean)
+                            zip_file.writestr(f"QR_CODE_{vessel_id}.png", qr_bytes)
                             
-                        new_hdk = st.text_input("Hạn Đăng kiểm (DD/MM/YYYY):", value=val_hdk)
-                        new_hgp = st.text_input("Hạn Giấy phép (DD/MM/YYYY):", value=val_hgp)
+                            if i % 10 == 0 or i == total_new - 1:
+                                percent_complete = int((i + 1) / total_new * 100)
+                                my_bar.progress(percent_complete, text=f"Đã tạo {i+1}/{total_new} mã mới ({percent_complete}%)")
                     
-                    st.markdown("---")
-                    col_btn1, col_btn2 = st.columns([1, 1])
-                    with col_btn1:
-                        st.markdown('<div class="btn-success">', unsafe_allow_html=True)
-                        btn_update = st.form_submit_button("💾 LƯU CẬP NHẬT")
-                        st.markdown('</div>', unsafe_allow_html=True)
-                    with col_btn2:
-                        st.markdown('<div class="btn-danger">', unsafe_allow_html=True)
-                        btn_delete = st.form_submit_button("🗑️ XÓA TÀU NÀY")
-                        st.markdown('</div>', unsafe_allow_html=True)
-                        
-                if btn_update:
-                    if mmap.get('CHU_TAU'): df_db.at[idx_to_edit, mmap['CHU_TAU']] = new_ten
-                    if mmap.get('CCCD'): df_db.at[idx_to_edit, mmap['CCCD']] = new_cccd
-                    if mmap.get('SDT'): df_db.at[idx_to_edit, mmap['SDT']] = new_sdt
-                    if mmap.get('DIA_CHI'): df_db.at[idx_to_edit, mmap['DIA_CHI']] = new_dc
-                    if mmap.get('NGHE'): df_db.at[idx_to_edit, mmap['NGHE']] = new_nghe
-                    if mmap.get('LMAX'): df_db.at[idx_to_edit, mmap['LMAX']] = new_lmax
-                    if mmap.get('CONG_SUAT'): df_db.at[idx_to_edit, mmap['CONG_SUAT']] = new_cs
-                    if mmap.get('HAN_DK'): df_db.at[idx_to_edit, mmap['HAN_DK']] = new_hdk
-                    if mmap.get('HAN_GP'): df_db.at[idx_to_edit, mmap['HAN_GP']] = new_hgp
+                    with open(QR_LOG_FILE, "a") as f:
+                        for vid in new_vessels_list:
+                            f.write(f"{vid}\n")
                     
-                    save_master_db(df_db)
-                    st.success(f"✅ Đã cập nhật thành công dữ liệu cho tàu {tau_selected}!")
+                    my_bar.empty()
+                    st.success(f"✅ Đã tạo xong {len(new_vessels)} Mã QR mới!")
+                    
+                    st.download_button(
+                        label="📥 TẢI FILE ZIP CHỨA MÃ QR MỚI",
+                        data=zip_buffer.getvalue(),
+                        file_name=f"Bo_Ma_QR_TauCa_Moi_{datetime.now().strftime('%d%m%Y')}.zip",
+                        mime="application/zip"
+                    )
+        
+        st.markdown("</div>", unsafe_allow_html=True)
+        
+        with st.expander("⚙️ Tùy chọn Nâng cao (Xóa lịch sử in ấn)"):
+            st.markdown("Nếu bạn bị mất file ZIP lưu trữ cũ và muốn hệ thống 'quên' lịch sử để **in lại toàn bộ 5.100 mã QR từ đầu**, hãy bấm nút bên dưới.")
+            st.markdown('<div class="btn-danger">', unsafe_allow_html=True)
+            if st.button("🗑️ XÓA LỊCH SỬ & IN LẠI TOÀN BỘ"):
+                if os.path.exists(QR_LOG_FILE):
+                    os.remove(QR_LOG_FILE)
                     st.rerun()
-                    
-                if btn_delete:
-                    df_db = df_db.drop(idx_to_edit).reset_index(drop=True)
-                    save_master_db(df_db)
-                    st.success(f"🗑️ Đã xóa tàu {tau_selected} khỏi CSDL!")
-                    st.rerun()
-
-        # --- TAB THÊM MỚI ---
-        with tab_add:
-            st.markdown("### Thêm hồ sơ tàu mới vào CSDL")
-            with st.form("add_form"):
-                add_dk = st.text_input("Số đăng ký (Bắt buộc):*", placeholder="VD: KH-99999-TS")
-                
-                c1, c2 = st.columns(2)
-                with c1:
-                    add_ten = st.text_input("Tên chủ tàu:")
-                    add_cccd = st.text_input("CCCD/CMND:")
-                    add_sdt = st.text_input("Số điện thoại:")
-                    add_dc = st.text_area("Địa chỉ:")
-                with c2:
-                    add_nghe = st.text_input("Nghề khai thác:")
-                    add_lmax = st.text_input("Lmax (m):")
-                    add_cs = st.text_input("Công suất (KW):")
-                    add_hdk = st.text_input("Hạn Đăng kiểm (DD/MM/YYYY):")
-                    add_hgp = st.text_input("Hạn Giấy phép (DD/MM/YYYY):")
-                
-                st.markdown('<div class="btn-success">', unsafe_allow_html=True)
-                btn_add = st.form_submit_button("➕ THÊM TÀU VÀO CSDL")
-                st.markdown('</div>', unsafe_allow_html=True)
-                
-            if btn_add:
-                if not add_dk.strip():
-                    st.error("❌ Số đăng ký không được để trống!")
-                elif add_dk.strip().upper() in df_db[col_dk].astype(str).str.upper().values:
-                    st.error("❌ Số đăng ký này đã tồn tại trong hệ thống!")
                 else:
-                    new_row = {}
-                    # Khởi tạo các cột bằng rỗng
-                    for col in df_db.columns: new_row[col] = ""
-                    
-                    # Điền dữ liệu vào các cột chuẩn
-                    new_row[col_dk] = add_dk.strip().upper()
-                    if mmap.get('CHU_TAU'): new_row[mmap['CHU_TAU']] = add_ten
-                    if mmap.get('CCCD'): new_row[mmap['CCCD']] = add_cccd
-                    if mmap.get('SDT'): new_row[mmap['SDT']] = add_sdt
-                    if mmap.get('DIA_CHI'): new_row[mmap['DIA_CHI']] = add_dc
-                    if mmap.get('NGHE'): new_row[mmap['NGHE']] = add_nghe
-                    if mmap.get('LMAX'): new_row[mmap['LMAX']] = add_lmax
-                    if mmap.get('CONG_SUAT'): new_row[mmap['CONG_SUAT']] = add_cs
-                    if mmap.get('HAN_DK'): new_row[mmap['HAN_DK']] = add_hdk
-                    if mmap.get('HAN_GP'): new_row[mmap['HAN_GP']] = add_hgp
-                    
-                    df_db = pd.concat([df_db, pd.DataFrame([new_row])], ignore_index=True)
-                    save_master_db(df_db)
-                    st.success(f"✅ Đã thêm tàu mới {add_dk.strip().upper()} thành công!")
-                    st.rerun()
+                    st.info("Lịch sử đang trống.")
+            st.markdown('</div>', unsafe_allow_html=True)
 
-# --- TRANG 3: ĐỐI CHIẾU ---
+# ---------------------------------------------------------
+# TAB 2: ĐỐI CHIẾU DỮ LIỆU
+# ---------------------------------------------------------
 elif menu == "🔄 Đối chiếu dữ liệu":
     st.header("ĐỐI CHIẾU VÀ ĐẮP DỮ LIỆU")
     st.markdown("---")
@@ -614,7 +384,9 @@ elif menu == "🔄 Đối chiếu dữ liệu":
                     st.download_button("📥 TẢI FILE KẾT QUẢ", data=output.getvalue(), file_name=f"Ket_qua_Doi_chieu_{datetime.now().strftime('%d%m%Y_%H%M')}.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
         st.markdown('</div>', unsafe_allow_html=True)
 
-# --- TRANG 4: LỌC DỮ LIỆU ---
+# ---------------------------------------------------------
+# TAB 3: LỌC DỮ LIỆU & XUẤT BÁO CÁO
+# ---------------------------------------------------------
 elif menu == "📊 Lọc & Xuất báo cáo":
     st.header("LỌC DỮ LIỆU & XUẤT BÁO CÁO")
     upload_filter = st.file_uploader("1. Tải lên File Dữ liệu cần lọc", type=["xlsx", "xls"], key="filter_upload")
