@@ -4,9 +4,8 @@ from datetime import datetime
 import io
 import os
 import qrcode
+import zipfile
 from PIL import Image
-import zipfile  # <--- THÊM DÒNG NÀY
-import time
 
 # =========================================================
 # CẤU HÌNH TRANG & GIAO DIỆN
@@ -90,6 +89,11 @@ mapping_rules = {
     "Bắc Nha Trang": {"keywords": ["lương sơn", "vĩnh lương", "văn đăng", "cát lợi", "võ tánh", "phạm văn đồng"], "exclude": ["ninh hòa", "ninh hoà", "vạn ninh", "cam ranh", "diên khánh", "cam lâm"]}
 }
 
+T3_COL_MAP = {
+    "Số đăng ký": "SO_DANG_KY", "Tên chủ tàu": "CHU_TAU", "SĐT": "SDT", "CCCD": "CCCD",
+    "Địa chỉ": "DIA_CHI", "Lmax": "LMAX", "Công suất": "CONG_SUAT", "Hạn Đăng kiểm": "HAN_DK", "Hạn GPKTTS": "HAN_GP"
+}
+
 def read_excel_auto_header(file_obj_or_path):
     if isinstance(file_obj_or_path, str):
         with open(file_obj_or_path, 'rb') as f: data = f.read()
@@ -148,7 +152,6 @@ def generate_qr_code(vessel_id, base_url):
     img.save(buf, format="PNG")
     return buf.getvalue()
 
-# Nạp Master DB lên Memory
 def load_master_db():
     if os.path.exists(DB_FILE):
         df = read_excel_auto_header(DB_FILE)
@@ -181,7 +184,6 @@ if "tau" in params:
         
     row = vessel_data.iloc[0]
     
-    # Rút trích dữ liệu
     def _v(alias, is_id=False):
         c = mmap.get(alias)
         if not c or c not in df_db.columns: return "-"
@@ -213,67 +215,67 @@ if "tau" in params:
     hgp_css = "m-alert-red" if check_expired(hgp) else "m-alert-green"
     hgp_txt = "ĐÃ HẾT HẠN" if check_expired(hgp) else "ĐANG CÒN HẠN"
 
-    # HTML Giao diện Điện thoại
+# LƯU Ý: ĐOẠN HTML DƯỚI ĐÂY ĐÃ ĐƯỢC CĂN LỀ TRÁI TUYỆT ĐỐI ĐỂ KHÔNG BỊ LỖI HIỂN THỊ CODE
     html_mobile = f"""
-    <div class="mobile-container">
-        <div class="m-header">
-            <h4>TRUY XUẤT HỒ SƠ TÀU CÁ</h4>
-            <h1>{vessel_id}</h1>
-            <div class="m-badge">📍 {dc_hien_thi}</div>
+<div class="mobile-container">
+    <div class="m-header">
+        <h4>TRUY XUẤT HỒ SƠ TÀU CÁ</h4>
+        <h1>{vessel_id}</h1>
+        <div class="m-badge">📍 {dc_hien_thi}</div>
+    </div>
+    
+    <div class="m-body">
+        <div class="m-section">
+            <div class="m-title">🛡️ TÌNH TRẠNG PHÁP LÝ</div>
+            <div class="m-grid">
+                <div class="m-alert-box {hdk_css}">
+                    <div class="m-alert-title">Đăng kiểm</div>
+                    <div class="m-alert-val">{hdk}</div>
+                    <div style="font-size:10px; margin-top:2px;">{hdk_txt}</div>
+                </div>
+                <div class="m-alert-box {hgp_css}">
+                    <div class="m-alert-title">Giấy phép</div>
+                    <div class="m-alert-val">{hgp}</div>
+                    <div style="font-size:10px; margin-top:2px;">{hgp_txt}</div>
+                </div>
+            </div>
         </div>
         
-        <div class="m-body">
-            <div class="m-section">
-                <div class="m-title">🛡️ TÌNH TRẠNG PHÁP LÝ</div>
-                <div class="m-grid">
-                    <div class="m-alert-box {hdk_css}">
-                        <div class="m-alert-title">Đăng kiểm</div>
-                        <div class="m-alert-val">{hdk}</div>
-                        <div style="font-size:10px; margin-top:2px;">{hdk_txt}</div>
-                    </div>
-                    <div class="m-alert-box {hgp_css}">
-                        <div class="m-alert-title">Giấy phép</div>
-                        <div class="m-alert-val">{hgp}</div>
-                        <div style="font-size:10px; margin-top:2px;">{hgp_txt}</div>
-                    </div>
-                </div>
+        <div class="m-section">
+            <div class="m-title">👤 THÔNG TIN CHỦ TÀU</div>
+            <div class="m-row">
+                <span class="m-label">Họ và tên</span>
+                <span class="m-val" style="color:#0d6efd; font-size:18px;">{chu_tau}</span>
             </div>
-            
-            <div class="m-section">
-                <div class="m-title">👤 THÔNG TIN CHỦ TÀU</div>
-                <div class="m-row">
-                    <span class="m-label">Họ và tên</span>
-                    <span class="m-val" style="color:#0d6efd; font-size:18px;">{chu_tau}</span>
-                </div>
-                <div class="m-grid">
-                    <div class="m-row"><span class="m-label">Số CCCD/CMND</span><span class="m-val">{cccd}</span></div>
-                    <div class="m-row"><span class="m-label">Số điện thoại</span><span class="m-val">{sdt}</span></div>
-                </div>
-                <div class="m-row">
-                    <span class="m-label">Địa chỉ gốc</span>
-                    <span class="m-val" style="font-size: 14px; font-weight: normal;">{dc_cu}</span>
-                </div>
+            <div class="m-grid">
+                <div class="m-row"><span class="m-label">Số CCCD/CMND</span><span class="m-val">{cccd}</span></div>
+                <div class="m-row"><span class="m-label">Số điện thoại</span><span class="m-val">{sdt}</span></div>
             </div>
-            
-            <div class="m-section">
-                <div class="m-title">⚙️ THÔNG SỐ KỸ THUẬT</div>
-                <div class="m-row">
-                    <span class="m-label">Nghề khai thác</span>
-                    <span class="m-val">{nghe}</span>
-                </div>
-                <div class="m-grid">
-                    <div class="m-row"><span class="m-label">Chiều dài Lmax</span><span class="m-val">{lmax} m</span></div>
-                    <div class="m-row"><span class="m-label">Công suất máy</span><span class="m-val">{cs} KW</span></div>
-                </div>
+            <div class="m-row">
+                <span class="m-label">Địa chỉ gốc</span>
+                <span class="m-val" style="font-size: 14px; font-weight: normal;">{dc_cu}</span>
+            </div>
+        </div>
+        
+        <div class="m-section">
+            <div class="m-title">⚙️ THÔNG SỐ KỸ THUẬT</div>
+            <div class="m-row">
+                <span class="m-label">Nghề khai thác</span>
+                <span class="m-val">{nghe}</span>
+            </div>
+            <div class="m-grid">
+                <div class="m-row"><span class="m-label">Chiều dài Lmax</span><span class="m-val">{lmax} m</span></div>
+                <div class="m-row"><span class="m-label">Công suất máy</span><span class="m-val">{cs} KW</span></div>
             </div>
         </div>
     </div>
-    <div style="text-align:center; padding: 20px; color: #adb5bd; font-size: 12px; font-family:sans-serif;">
-        Cấp bởi Chi cục Thủy sản NHVN
-    </div>
-    """
+</div>
+<div style="text-align:center; padding: 20px; color: #adb5bd; font-size: 12px; font-family:sans-serif;">
+    Cấp bởi Chi cục Thủy sản NHVN
+</div>
+"""
     st.markdown(html_mobile, unsafe_allow_html=True)
-    st.stop() # Dừng vẽ giao diện quản trị bên dưới
+    st.stop()
 
 
 # =========================================================
@@ -284,15 +286,13 @@ with st.sidebar:
     except: st.image("https://upload.wikimedia.org/wikipedia/commons/thumb/1/11/Vietnam_Fisheries_Surveillance_Logo.svg/1200px-Vietnam_Fisheries_Surveillance_Logo.svg.png", width=90)
     st.markdown("### QUẢN LÝ TÀU CÁ")
     
-    # Thêm ô nhập tên miền của Web app để sinh mã QR
-    app_domain = st.text_input("🌐 Tên miền Web (Dùng tạo mã QR):", value="https://app-kiemngu-nhvn.streamlit.app")
+    app_domain = st.text_input("🌐 Tên miền Web (Dùng tạo mã QR):", value="https://quanlytaucanhvn-29032026.streamlit.app")
     
     st.markdown("---")
     menu = st.radio("MENU CHÍNH", ["🔍 Tra cứu thông tin", "🔄 Đối chiếu dữ liệu", "📊 Lọc & Xuất báo cáo"])
     st.markdown("---")
     st.caption("© 2026 - Chi cục Thủy sản NHVN")
 
-# Load DB hiện có
 df_db, mmap = load_master_db()
 
 if menu == "🔍 Tra cứu thông tin":
@@ -305,60 +305,44 @@ if menu == "🔍 Tra cứu thông tin":
             st.success("✅ Đã cập nhật CSDL lên máy chủ thành công!")
             st.rerun()
 
-    col_s1, col_s2, col_s3 = st.columns([3, 1, 1])
-    with col_s1: keyword = st.text_input("Nhập từ khóa:", placeholder="Số đăng ký hoặc tên chủ tàu...")
-    with col_s2: search_type = st.selectbox("Tìm theo", ["Tất cả", "Số đăng ký", "Tên chủ tàu"])
-    with col_s3: 
-        st.write("##"); btn_search = st.button("🔍 TÌM KIẾM")
-
     if df_db is not None:
         mtime = os.path.getmtime(DB_FILE)
         st.caption(f"Trạng thái: Đã tải {len(df_db)} tàu (Cập nhật lần cuối: {datetime.fromtimestamp(mtime).strftime('%H:%M %d/%m/%Y')})")
-        # ========================================================
-        # TÍNH NĂNG MỚI: TẠO MÃ QR HÀNG LOẠT
-        # ========================================================
+
+        # TÍNH NĂNG XUẤT HÀNG LOẠT FILE ZIP MÃ QR
         with st.expander("🖨️ XUẤT MÃ QR HÀNG LOẠT CHO TOÀN BỘ TÀU"):
             st.markdown("Tính năng này sẽ tự động tạo mã QR cho toàn bộ danh sách tàu và nén thành 1 file ZIP để bạn mang đi in.")
-            
             if st.button("🚀 BẮT ĐẦU TẠO QR HÀNG LOẠT", type="primary"):
                 col_dk = mmap.get('SO_DANG_KY')
                 if not col_dk:
                     st.error("Không tìm thấy cột Số đăng ký trong CSDL!")
                 else:
                     total_vessels = len(df_db)
-                    progress_text = "Đang tạo mã QR... Vui lòng chờ."
-                    my_bar = st.progress(0, text=progress_text)
-                    
+                    my_bar = st.progress(0, text="Đang tạo mã QR... Vui lòng chờ.")
                     zip_buffer = io.BytesIO()
                     app_domain_clean = app_domain.strip().rstrip("/")
                     
-                    # Bắt đầu nén file
                     with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zip_file:
                         for i, (idx, row) in enumerate(df_db.iterrows()):
                             vessel_id = str(row[col_dk]).strip().upper()
                             if vessel_id and vessel_id.lower() not in ['nan', 'none']:
-                                # 1. Tạo ảnh QR
                                 qr_bytes = generate_qr_code(vessel_id, app_domain_clean)
-                                
-                                # 2. Lưu vào file zip với tên là Biển số tàu
                                 zip_file.writestr(f"QR_CODE_{vessel_id}.png", qr_bytes)
                             
-                            # Cập nhật thanh tiến trình mỗi 50 tàu để tránh đơ giao diện
                             if i % 50 == 0 or i == total_vessels - 1:
                                 percent_complete = int((i + 1) / total_vessels * 100)
                                 my_bar.progress(percent_complete, text=f"Đã tạo {i+1}/{total_vessels} mã ({percent_complete}%)")
                     
-                    my_bar.empty() # Xóa thanh tiến trình khi xong
+                    my_bar.empty()
                     st.success("✅ Đã tạo xong toàn bộ bộ Mã QR!")
-                    
-                    # Nút tải file ZIP
-                    st.download_button(
-                        label="📥 TẢI FILE ZIP CHỨA TOÀN BỘ MÃ QR",
-                        data=zip_buffer.getvalue(),
-                        file_name=f"Bo_Ma_QR_TauCa_NHVN_{datetime.now().strftime('%d%m%Y')}.zip",
-                        mime="application/zip"
-                    )
+                    st.download_button(label="📥 TẢI FILE ZIP CHỨA TOÀN BỘ MÃ QR", data=zip_buffer.getvalue(), file_name=f"Bo_Ma_QR_TauCa_NHVN_{datetime.now().strftime('%d%m%Y')}.zip", mime="application/zip")
         st.markdown("---")
+
+    col_s1, col_s2, col_s3 = st.columns([3, 1, 1])
+    with col_s1: keyword = st.text_input("Nhập từ khóa:", placeholder="Số đăng ký hoặc tên chủ tàu...")
+    with col_s2: search_type = st.selectbox("Tìm theo", ["Tất cả", "Số đăng ký", "Tên chủ tàu"])
+    with col_s3: 
+        st.write("##"); btn_search = st.button("🔍 TÌM KIẾM")
 
     if btn_search or keyword:
         if df_db is None:
@@ -413,26 +397,26 @@ if menu == "🔍 Tra cứu thông tin":
                         s_item = df_display[df_display['Số đăng ký'] == selected_vessel].iloc[0]
                         loc_str = s_item['Địa phương'] if s_item['Địa phương'] != "-" else "CHƯA XÁC ĐỊNH"
                         
+# LƯU Ý: LỀ TRÁI TUYỆT ĐỐI CHO KHỐI HTML NÀY NỮA
                         html_card = f"""
-                        <div class="vessel-card">
-                            <div class="card-header"><h4>CHI TIẾT TÀU CÁ</h4><h2>{s_item['Số đăng ký']}</h2><span class="badge-loc">{loc_str}</span></div>
-                            <div class="card-body">
-                                <div class="info-row"><div><p class="info-label">👤 CHỦ PHƯƠNG TIỆN</p><p class="info-val">{s_item['Tên chủ tàu']}</p></div>
-                                <div><p class="info-label">💳 SỐ CCCD</p><p class="info-val">{s_item['CCCD']}</p></div></div>
-                                <div class="info-row"><div><p class="info-label">📞 SỐ ĐIỆN THOẠI</p><p class="info-val">{s_item['SĐT']}</p></div>
-                                <div><p class="info-label">📏 LMAX</p><p class="info-val">{s_item['Lmax']} m</p></div></div>
-                                <div class="info-row" style="border-bottom:none;"><div><p class="info-label">⚡ CÔNG SUẤT</p><p class="info-val">{s_item['Công suất']} KW</p></div>
-                                <div><p class="info-label">📍 ĐỊA CHỈ</p><p class="info-val">{s_item['Địa chỉ']}</p></div></div>
-                                <div style="margin-top:20px;">
-                                    <div class="date-box"><p class="date-label">🗓 HẠN GIẤY PHÉP KTTS</p><p class="date-val {'val-expired' if check_expired(s_item['Hạn GPKTTS']) else 'val-valid'}">{s_item['Hạn GPKTTS']}</p></div>
-                                    <div class="date-box"><p class="date-label">🗓 HẠN ĐĂNG KIỂM</p><p class="date-val {'val-expired' if check_expired(s_item['Hạn Đăng kiểm']) else 'val-valid'}">{s_item['Hạn Đăng kiểm']}</p></div>
-                                </div>
-                            </div>
-                        </div>
-                        """
+<div class="vessel-card">
+    <div class="card-header"><h4>CHI TIẾT TÀU CÁ</h4><h2>{s_item['Số đăng ký']}</h2><span class="badge-loc">{loc_str}</span></div>
+    <div class="card-body">
+        <div class="info-row"><div><p class="info-label">👤 CHỦ PHƯƠNG TIỆN</p><p class="info-val">{s_item['Tên chủ tàu']}</p></div>
+        <div><p class="info-label">💳 SỐ CCCD</p><p class="info-val">{s_item['CCCD']}</p></div></div>
+        <div class="info-row"><div><p class="info-label">📞 SỐ ĐIỆN THOẠI</p><p class="info-val">{s_item['SĐT']}</p></div>
+        <div><p class="info-label">📏 LMAX</p><p class="info-val">{s_item['Lmax']} m</p></div></div>
+        <div class="info-row" style="border-bottom:none;"><div><p class="info-label">⚡ CÔNG SUẤT</p><p class="info-val">{s_item['Công suất']} KW</p></div>
+        <div><p class="info-label">📍 ĐỊA CHỈ</p><p class="info-val">{s_item['Địa chỉ']}</p></div></div>
+        <div style="margin-top:20px;">
+            <div class="date-box"><p class="date-label">🗓 HẠN GIẤY PHÉP KTTS</p><p class="date-val {'val-expired' if check_expired(s_item['Hạn GPKTTS']) else 'val-valid'}">{s_item['Hạn GPKTTS']}</p></div>
+            <div class="date-box"><p class="date-label">🗓 HẠN ĐĂNG KIỂM</p><p class="date-val {'val-expired' if check_expired(s_item['Hạn Đăng kiểm']) else 'val-valid'}">{s_item['Hạn Đăng kiểm']}</p></div>
+        </div>
+    </div>
+</div>
+"""
                         st.markdown(html_card, unsafe_allow_html=True)
                         
-                        # CHỨC NĂNG TẠO VÀ TẢI MÃ QR
                         st.markdown("---")
                         app_domain_clean = app_domain.strip().rstrip("/")
                         qr_bytes = generate_qr_code(s_item['Số đăng ký'], app_domain_clean)
@@ -443,9 +427,6 @@ if menu == "🔍 Tra cứu thông tin":
                             st.info(f"Mã QR chứa đường link dẫn trực tiếp đến hồ sơ điện thoại của tàu **{s_item['Số đăng ký']}**.")
                             st.download_button("🖨️ TẢI ẢNH MÃ QR ĐỂ IN", data=qr_bytes, file_name=f"QR_CODE_{s_item['Số đăng ký']}.png", mime="image/png")
 
-# =========================================================
-# TRANG 2 VÀ TRANG 3 GIỮ NGUYÊN HOÀN TOÀN TÍNH NĂNG
-# =========================================================
 elif menu == "🔄 Đối chiếu dữ liệu":
     st.header("ĐỐI CHIẾU VÀ ĐẮP DỮ LIỆU")
     st.markdown("---")
