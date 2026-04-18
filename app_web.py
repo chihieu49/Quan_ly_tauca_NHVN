@@ -89,8 +89,27 @@ T3_COL_MAP = {
 }
 
 # =========================================================
-# CÁC HÀM XỬ LÝ LÕI
+# CÁC HÀM XỬ LÝ LÕI (AI QUÉT TIÊU ĐỀ)
 # =========================================================
+
+def read_excel_auto_header(file_obj):
+    """Hàm AI Tự động quét và tìm dòng Tiêu đề chuẩn trong File Excel báo cáo"""
+    file_obj.seek(0)
+    df_temp = pd.read_excel(file_obj, header=None, nrows=50)
+    best_idx = 0
+    max_valid_cells = 0
+    
+    for i, row in df_temp.iterrows():
+        valid_cells = sum(1 for x in row.values if pd.notna(x) and str(x).strip() != '')
+        if valid_cells > max_valid_cells:
+            max_valid_cells = valid_cells
+            best_idx = i
+            
+    file_obj.seek(0)
+    df = pd.read_excel(file_obj, header=best_idx)
+    df.columns = df.columns.astype(str).str.strip()
+    return df
+
 def map_columns(df_columns):
     mapping = {}
     for std_name, alias_list in COLUMN_ALIASES.items():
@@ -130,7 +149,6 @@ if 'last_update' not in st.session_state: st.session_state.last_update = None
 # SIDEBAR ĐIỀU HƯỚNG
 # =========================================================
 with st.sidebar:
-    # Xử lý ưu tiên lấy Logo từ file tải lên GitHub, nếu lỗi lấy ảnh dự phòng
     try:
         st.image("logo_kiem_ngu.png", width=90)
     except:
@@ -153,8 +171,7 @@ if menu == "🔍 Tra cứu thông tin":
     with st.expander("📁 Cập nhật Cơ sở dữ liệu (Nạp file Excel)", expanded=st.session_state.db_df is None):
         uploaded_db = st.file_uploader("Chọn file dữ liệu để tra cứu", type=["xlsx", "xls"], key="db_uploader")
         if uploaded_db:
-            df = pd.read_excel(uploaded_db)
-            df.columns = [str(c).strip() for c in df.columns]
+            df = read_excel_auto_header(uploaded_db)
             st.session_state.db_df = df
             st.session_state.db_mapping = map_columns(df.columns)
             st.session_state.last_update = datetime.now().strftime('%H:%M %d/%m/%Y')
@@ -201,7 +218,6 @@ if menu == "🔍 Tra cứu thông tin":
                 with left_col:
                     st.markdown("**DANH SÁCH KẾT QUẢ**")
                     
-                    # Chuẩn bị dữ liệu hiển thị gọn
                     disp_cols = []
                     disp_data = []
                     
@@ -227,7 +243,6 @@ if menu == "🔍 Tra cứu thông tin":
                                 except: pass
                             item[title] = str(val) if pd.notna(val) else "-"
                         
-                        # Bổ sung Xã/Phường
                         dc_col = mmap.get('DIA_CHI')
                         item['Địa phương'] = get_new_address(row[dc_col]) if dc_col and dc_col in res.columns else "-"
                         
@@ -235,7 +250,6 @@ if menu == "🔍 Tra cứu thông tin":
                     
                     df_display = pd.DataFrame(disp_data)
                     
-                    # Cho phép chọn dòng để xem Thẻ thông tin
                     selected_vessel = st.selectbox("Chọn tàu để xem chi tiết:", df_display['Số đăng ký'].tolist())
                     st.dataframe(df_display, use_container_width=True, hide_index=True)
 
@@ -309,14 +323,15 @@ elif menu == "🔄 Đối chiếu dữ liệu":
 
     if src_file and tgt_files:
         st.markdown("### 3. Thiết lập Đối chiếu")
-        df_src = pd.read_excel(src_file)
-        df_src.columns = df_src.columns.astype(str).str.strip()
+        
+        # Dùng AI đọc file gốc
+        df_src = read_excel_auto_header(src_file)
         cols_src = list(df_src.columns)
         
         # Gộp cột từ các file đích
         cols_tgt = []
         for f in tgt_files:
-            temp_df = pd.read_excel(f, nrows=5)
+            temp_df = read_excel_auto_header(f)
             for c in temp_df.columns:
                 c_str = str(c).strip()
                 if c_str not in cols_tgt and not c_str.lower().startswith('unnamed'): cols_tgt.append(c_str)
@@ -336,8 +351,7 @@ elif menu == "🔄 Đối chiếu dữ liệu":
                     df_src['_key_match'] = df_src[key_src].astype(str).str.strip().str.upper()
                     
                     for file_idx, t_file in enumerate(tgt_files):
-                        df_t = pd.read_excel(t_file)
-                        df_t.columns = df_t.columns.astype(str).str.strip()
+                        df_t = read_excel_auto_header(t_file)
                         
                         local_key = None
                         if key_tgt == "<Tự động nhận diện bằng AI>":
@@ -379,8 +393,7 @@ elif menu == "📊 Lọc & Xuất báo cáo":
     upload_filter = st.file_uploader("1. Tải lên File Dữ liệu cần lọc", type=["xlsx", "xls"], key="filter_upload")
     
     if upload_filter:
-        df_raw = pd.read_excel(upload_filter)
-        df_raw.columns = df_raw.columns.astype(str).str.strip()
+        df_raw = read_excel_auto_header(upload_filter)
         all_cols = list(df_raw.columns)
         mmap = map_columns(all_cols)
         
@@ -408,7 +421,6 @@ elif menu == "📊 Lọc & Xuất báo cáo":
         st.markdown('<div class="btn-success">', unsafe_allow_html=True)
         if st.button("▶ XEM TRƯỚC DASHBOARD & XUẤT BÁO CÁO"):
             with st.spinner("Hệ thống AI đang xử lý dữ liệu..."):
-                # Tiền xử lý địa chỉ
                 col_diachi_goc = mmap.get('DIA_CHI', '')
                 if not col_diachi_goc:
                     st.error("Không tìm thấy Cột Địa chỉ trong file!")
@@ -417,7 +429,6 @@ elif menu == "📊 Lọc & Xuất báo cáo":
                     df_filtered = df_raw[df_raw['Xã/Phường mới'].notna()].copy()
                     if selected_commune != "Tất cả": df_filtered = df_filtered[df_filtered['Xã/Phường mới'] == selected_commune]
 
-                    # Sửa số CCCD
                     col_cccd = mmap.get('CCCD', '')
                     if col_cccd and col_cccd in df_filtered.columns:
                         def format_cccd_export(x):
@@ -427,7 +438,6 @@ elif menu == "📊 Lọc & Xuất báo cáo":
                             return v_str.zfill(12) 
                         df_filtered[col_cccd] = df_filtered[col_cccd].apply(format_cccd_export)
 
-                    # Tính hạn
                     parsed_dates = pd.to_datetime(df_filtered[selected_date_col], dayfirst=True, errors='coerce')
                     mask_old = (parsed_dates.dt.year < 1950) & parsed_dates.notna()
                     if mask_old.any(): parsed_dates.loc[mask_old] = parsed_dates.loc[mask_old].apply(lambda x: x.replace(year=x.year + 100))
@@ -498,7 +508,6 @@ elif menu == "📊 Lọc & Xuất báo cáo":
                         
                         st.dataframe(df_thong_ke, use_container_width=True, hide_index=True)
 
-                        # Tạo file Excel Tải Về
                         output = io.BytesIO()
                         with pd.ExcelWriter(output, engine='openpyxl') as writer:
                             df_final.to_excel(writer, sheet_name='Danh sách chi tiết', index=False)
