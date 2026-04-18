@@ -1,5 +1,9 @@
-streamlit
-pandas
-openpyxl
-qrcode
-pillow
+import streamlit as st
+import pandas as pd
+from datetime import datetime
+import io
+import os
+import qrcode
+from PIL import Image
+import zipfile  # <--- THÊM DÒNG NÀY
+import time
