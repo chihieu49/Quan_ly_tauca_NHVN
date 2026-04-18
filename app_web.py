@@ -28,7 +28,7 @@ st.markdown("""
     .card-body { padding: 20px; }
     .info-row { display: grid; grid-template-columns: 1fr 1fr; border-bottom: 1px solid #f8f9fa; padding-bottom: 10px; margin-bottom: 10px; }
     .info-label { color: #6c757d; font-size: 13px; font-weight: bold; margin-bottom: 2px; }
-    .info-val { color: #212529; font-size: 15px; font-weight: bold; }
+    .info-val { color: #212529; font-size: 15px; font-weight: bold; word-wrap: break-word; white-space: normal; }
     .date-box { background-color: #f8f9fa; border: 1px solid #dee2e6; border-radius: 5px; padding: 12px 15px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
     .date-label { color: #6c757d; font-size: 13px; font-weight: bold; margin: 0; }
     .date-val { font-size: 14px; font-weight: bold; margin: 0; }
@@ -45,7 +45,7 @@ st.markdown("""
     .m-title { font-size: 16px; color: #0d6efd; border-bottom: 2px solid #e9ecef; padding-bottom: 5px; margin-bottom: 15px; font-weight: bold; display:flex; align-items: center; gap: 8px;}
     .m-row { display: flex; flex-direction: column; margin-bottom: 12px; }
     .m-label { font-size: 12px; color: #6c757d; font-weight: bold; text-transform: uppercase; margin-bottom: 2px;}
-    .m-val { font-size: 16px; color: #212529; font-weight: bold; }
+    .m-val { font-size: 16px; color: #212529; font-weight: bold; word-wrap: break-word; white-space: normal;}
     .m-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 12px;}
     .m-badge { background: #e9ecef; color: #495057; padding: 5px 10px; border-radius: 6px; font-size: 14px; font-weight: bold; display: inline-block; margin-top:5px;}
     .m-alert-box { padding: 15px; border-radius: 10px; margin-bottom: 10px; text-align: center;}
@@ -215,65 +215,22 @@ if "tau" in params:
     hgp_css = "m-alert-red" if check_expired(hgp) else "m-alert-green"
     hgp_txt = "ĐÃ HẾT HẠN" if check_expired(hgp) else "ĐANG CÒN HẠN"
 
-# LƯU Ý: ĐOẠN HTML DƯỚI ĐÂY ĐÃ ĐƯỢC CĂN LỀ TRÁI TUYỆT ĐỐI ĐỂ KHÔNG BỊ LỖI HIỂN THỊ CODE
-    html_mobile = f"""
-<div class="mobile-container">
-    <div class="m-header">
-        <h4>TRUY XUẤT HỒ SƠ TÀU CÁ</h4>
-        <h1>{vessel_id}</h1>
-        <div class="m-badge">📍 {dc_hien_thi}</div>
-    </div>
-    
-    <div class="m-body">
-        <div class="m-section">
-            <div class="m-title">🛡️ TÌNH TRẠNG PHÁP LÝ</div>
-            <div class="m-grid">
-                <div class="m-alert-box {hdk_css}">
-                    <div class="m-alert-title">Đăng kiểm</div>
-                    <div class="m-alert-val">{hdk}</div>
-                    <div style="font-size:10px; margin-top:2px;">{hdk_txt}</div>
-                </div>
-                <div class="m-alert-box {hgp_css}">
-                    <div class="m-alert-title">Giấy phép</div>
-                    <div class="m-alert-val">{hgp}</div>
-                    <div style="font-size:10px; margin-top:2px;">{hgp_txt}</div>
-                </div>
-            </div>
-        </div>
-        
-        <div class="m-section">
-            <div class="m-title">👤 THÔNG TIN CHỦ TÀU</div>
-            <div class="m-row">
-                <span class="m-label">Họ và tên</span>
-                <span class="m-val" style="color:#0d6efd; font-size:18px;">{chu_tau}</span>
-            </div>
-            <div class="m-grid">
-                <div class="m-row"><span class="m-label">Số CCCD/CMND</span><span class="m-val">{cccd}</span></div>
-                <div class="m-row"><span class="m-label">Số điện thoại</span><span class="m-val">{sdt}</span></div>
-            </div>
-            <div class="m-row">
-                <span class="m-label">Địa chỉ gốc</span>
-                <span class="m-val" style="font-size: 14px; font-weight: normal;">{dc_cu}</span>
-            </div>
-        </div>
-        
-        <div class="m-section">
-            <div class="m-title">⚙️ THÔNG SỐ KỸ THUẬT</div>
-            <div class="m-row">
-                <span class="m-label">Nghề khai thác</span>
-                <span class="m-val">{nghe}</span>
-            </div>
-            <div class="m-grid">
-                <div class="m-row"><span class="m-label">Chiều dài Lmax</span><span class="m-val">{lmax} m</span></div>
-                <div class="m-row"><span class="m-label">Công suất máy</span><span class="m-val">{cs} KW</span></div>
-            </div>
-        </div>
-    </div>
-</div>
-<div style="text-align:center; padding: 20px; color: #adb5bd; font-size: 12px; font-family:sans-serif;">
-    Cấp bởi Chi cục Thủy sản NHVN
-</div>
-"""
+    # LƯU Ý: TOÀN BỘ HTML BÊN DƯỚI KHÔNG CÓ KHOẢNG TRẮNG Ở ĐẦU DÒNG
+    html_mobile = f"""<div class="mobile-container">
+<div class="m-header"><h4>TRUY XUẤT HỒ SƠ TÀU CÁ</h4><h1>{vessel_id}</h1><div class="m-badge">📍 {dc_hien_thi}</div></div>
+<div class="m-body">
+<div class="m-section"><div class="m-title">🛡️ TÌNH TRẠNG PHÁP LÝ</div>
+<div class="m-grid"><div class="m-alert-box {hdk_css}"><div class="m-alert-title">Đăng kiểm</div><div class="m-alert-val">{hdk}</div><div style="font-size:10px; margin-top:2px;">{hdk_txt}</div></div>
+<div class="m-alert-box {hgp_css}"><div class="m-alert-title">Giấy phép</div><div class="m-alert-val">{hgp}</div><div style="font-size:10px; margin-top:2px;">{hgp_txt}</div></div></div></div>
+<div class="m-section"><div class="m-title">👤 THÔNG TIN CHỦ TÀU</div>
+<div class="m-row"><span class="m-label">Họ và tên</span><span class="m-val" style="color:#0d6efd; font-size:18px;">{chu_tau}</span></div>
+<div class="m-grid"><div class="m-row"><span class="m-label">Số CCCD/CMND</span><span class="m-val">{cccd}</span></div><div class="m-row"><span class="m-label">Số điện thoại</span><span class="m-val">{sdt}</span></div></div>
+<div class="m-row"><span class="m-label">Địa chỉ gốc</span><span class="m-val" style="font-size: 14px; font-weight: normal;">{dc_cu}</span></div></div>
+<div class="m-section"><div class="m-title">⚙️ THÔNG SỐ KỸ THUẬT</div>
+<div class="m-row"><span class="m-label">Nghề khai thác</span><span class="m-val">{nghe}</span></div>
+<div class="m-grid"><div class="m-row"><span class="m-label">Chiều dài Lmax</span><span class="m-val">{lmax} m</span></div><div class="m-row"><span class="m-label">Công suất máy</span><span class="m-val">{cs} KW</span></div></div></div>
+</div></div>
+<div style="text-align:center; padding: 20px; color: #adb5bd; font-size: 12px; font-family:sans-serif;">Cấp bởi Chi cục Thủy sản NHVN</div>"""
     st.markdown(html_mobile, unsafe_allow_html=True)
     st.stop()
 
@@ -309,7 +266,6 @@ if menu == "🔍 Tra cứu thông tin":
         mtime = os.path.getmtime(DB_FILE)
         st.caption(f"Trạng thái: Đã tải {len(df_db)} tàu (Cập nhật lần cuối: {datetime.fromtimestamp(mtime).strftime('%H:%M %d/%m/%Y')})")
 
-        # TÍNH NĂNG XUẤT HÀNG LOẠT FILE ZIP MÃ QR
         with st.expander("🖨️ XUẤT MÃ QR HÀNG LOẠT CHO TOÀN BỘ TÀU"):
             st.markdown("Tính năng này sẽ tự động tạo mã QR cho toàn bộ danh sách tàu và nén thành 1 file ZIP để bạn mang đi in.")
             if st.button("🚀 BẮT ĐẦU TẠO QR HÀNG LOẠT", type="primary"):
@@ -397,24 +353,19 @@ if menu == "🔍 Tra cứu thông tin":
                         s_item = df_display[df_display['Số đăng ký'] == selected_vessel].iloc[0]
                         loc_str = s_item['Địa phương'] if s_item['Địa phương'] != "-" else "CHƯA XÁC ĐỊNH"
                         
-# LƯU Ý: LỀ TRÁI TUYỆT ĐỐI CHO KHỐI HTML NÀY NỮA
-                        html_card = f"""
-<div class="vessel-card">
-    <div class="card-header"><h4>CHI TIẾT TÀU CÁ</h4><h2>{s_item['Số đăng ký']}</h2><span class="badge-loc">{loc_str}</span></div>
-    <div class="card-body">
-        <div class="info-row"><div><p class="info-label">👤 CHỦ PHƯƠNG TIỆN</p><p class="info-val">{s_item['Tên chủ tàu']}</p></div>
-        <div><p class="info-label">💳 SỐ CCCD</p><p class="info-val">{s_item['CCCD']}</p></div></div>
-        <div class="info-row"><div><p class="info-label">📞 SỐ ĐIỆN THOẠI</p><p class="info-val">{s_item['SĐT']}</p></div>
-        <div><p class="info-label">📏 LMAX</p><p class="info-val">{s_item['Lmax']} m</p></div></div>
-        <div class="info-row" style="border-bottom:none;"><div><p class="info-label">⚡ CÔNG SUẤT</p><p class="info-val">{s_item['Công suất']} KW</p></div>
-        <div><p class="info-label">📍 ĐỊA CHỈ</p><p class="info-val">{s_item['Địa chỉ']}</p></div></div>
-        <div style="margin-top:20px;">
-            <div class="date-box"><p class="date-label">🗓 HẠN GIẤY PHÉP KTTS</p><p class="date-val {'val-expired' if check_expired(s_item['Hạn GPKTTS']) else 'val-valid'}">{s_item['Hạn GPKTTS']}</p></div>
-            <div class="date-box"><p class="date-label">🗓 HẠN ĐĂNG KIỂM</p><p class="date-val {'val-expired' if check_expired(s_item['Hạn Đăng kiểm']) else 'val-valid'}">{s_item['Hạn Đăng kiểm']}</p></div>
-        </div>
-    </div>
-</div>
-"""
+                        html_card = f"""<div class="vessel-card">
+<div class="card-header"><h4>CHI TIẾT TÀU CÁ</h4><h2>{s_item['Số đăng ký']}</h2><span class="badge-loc">{loc_str}</span></div>
+<div class="card-body">
+<div class="info-row"><div><p class="info-label">👤 CHỦ PHƯƠNG TIỆN</p><p class="info-val">{s_item['Tên chủ tàu']}</p></div>
+<div><p class="info-label">💳 SỐ CCCD</p><p class="info-val">{s_item['CCCD']}</p></div></div>
+<div class="info-row"><div><p class="info-label">📞 SỐ ĐIỆN THOẠI</p><p class="info-val">{s_item['SĐT']}</p></div>
+<div><p class="info-label">📏 LMAX</p><p class="info-val">{s_item['Lmax']} m</p></div></div>
+<div class="info-row" style="border-bottom:none;"><div><p class="info-label">⚡ CÔNG SUẤT</p><p class="info-val">{s_item['Công suất']} KW</p></div>
+<div><p class="info-label">📍 ĐỊA CHỈ</p><p class="info-val">{s_item['Địa chỉ']}</p></div></div>
+<div style="margin-top:20px;">
+<div class="date-box"><p class="date-label">🗓 HẠN GIẤY PHÉP KTTS</p><p class="date-val {'val-expired' if check_expired(s_item['Hạn GPKTTS']) else 'val-valid'}">{s_item['Hạn GPKTTS']}</p></div>
+<div class="date-box"><p class="date-label">🗓 HẠN ĐĂNG KIỂM</p><p class="date-val {'val-expired' if check_expired(s_item['Hạn Đăng kiểm']) else 'val-valid'}">{s_item['Hạn Đăng kiểm']}</p></div>
+</div></div></div>"""
                         st.markdown(html_card, unsafe_allow_html=True)
                         
                         st.markdown("---")
