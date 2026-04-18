@@ -5,6 +5,8 @@ import io
 import os
 import qrcode
 from PIL import Image
+import zipfile  # <--- THÊM DÒNG NÀY
+import time
 
 # =========================================================
 # CẤU HÌNH TRANG & GIAO DIỆN
@@ -312,6 +314,51 @@ if menu == "🔍 Tra cứu thông tin":
     if df_db is not None:
         mtime = os.path.getmtime(DB_FILE)
         st.caption(f"Trạng thái: Đã tải {len(df_db)} tàu (Cập nhật lần cuối: {datetime.fromtimestamp(mtime).strftime('%H:%M %d/%m/%Y')})")
+        # ========================================================
+        # TÍNH NĂNG MỚI: TẠO MÃ QR HÀNG LOẠT
+        # ========================================================
+        with st.expander("🖨️ XUẤT MÃ QR HÀNG LOẠT CHO TOÀN BỘ TÀU"):
+            st.markdown("Tính năng này sẽ tự động tạo mã QR cho toàn bộ danh sách tàu và nén thành 1 file ZIP để bạn mang đi in.")
+            
+            if st.button("🚀 BẮT ĐẦU TẠO QR HÀNG LOẠT", type="primary"):
+                col_dk = mmap.get('SO_DANG_KY')
+                if not col_dk:
+                    st.error("Không tìm thấy cột Số đăng ký trong CSDL!")
+                else:
+                    total_vessels = len(df_db)
+                    progress_text = "Đang tạo mã QR... Vui lòng chờ."
+                    my_bar = st.progress(0, text=progress_text)
+                    
+                    zip_buffer = io.BytesIO()
+                    app_domain_clean = app_domain.strip().rstrip("/")
+                    
+                    # Bắt đầu nén file
+                    with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zip_file:
+                        for i, (idx, row) in enumerate(df_db.iterrows()):
+                            vessel_id = str(row[col_dk]).strip().upper()
+                            if vessel_id and vessel_id.lower() not in ['nan', 'none']:
+                                # 1. Tạo ảnh QR
+                                qr_bytes = generate_qr_code(vessel_id, app_domain_clean)
+                                
+                                # 2. Lưu vào file zip với tên là Biển số tàu
+                                zip_file.writestr(f"QR_CODE_{vessel_id}.png", qr_bytes)
+                            
+                            # Cập nhật thanh tiến trình mỗi 50 tàu để tránh đơ giao diện
+                            if i % 50 == 0 or i == total_vessels - 1:
+                                percent_complete = int((i + 1) / total_vessels * 100)
+                                my_bar.progress(percent_complete, text=f"Đã tạo {i+1}/{total_vessels} mã ({percent_complete}%)")
+                    
+                    my_bar.empty() # Xóa thanh tiến trình khi xong
+                    st.success("✅ Đã tạo xong toàn bộ bộ Mã QR!")
+                    
+                    # Nút tải file ZIP
+                    st.download_button(
+                        label="📥 TẢI FILE ZIP CHỨA TOÀN BỘ MÃ QR",
+                        data=zip_buffer.getvalue(),
+                        file_name=f"Bo_Ma_QR_TauCa_NHVN_{datetime.now().strftime('%d%m%Y')}.zip",
+                        mime="application/zip"
+                    )
+        st.markdown("---")
 
     if btn_search or keyword:
         if df_db is None:
