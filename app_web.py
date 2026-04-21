@@ -506,23 +506,31 @@ elif menu == "📊 Lọc & Xuất báo cáo":
         df_raw = df_db.copy()
         all_cols = list(df_raw.columns)
         
-        st.markdown("### 1. Thiết lập Cột dữ liệu xuất ra")
+        st.markdown("### 1. Thiết lập Lọc và Xuất báo cáo")
         col_c1, col_c2 = st.columns(2)
         with col_c1:
             selected_cols = st.multiselect("Chọn các cột sẽ hiển thị trong báo cáo:", all_cols, default=[c for c in all_cols if c in mmap.values()])
             selected_commune = st.selectbox("Lọc theo Địa phương:", ["Tất cả", "Xã Đại Lãnh", "Xã Tu Bông", "Xã Vạn Hưng", "Xã Vạn Ninh", "Xã Vạn Thắng", "Phường Đông Ninh Hoà", "Phường Hoà Thắng", "Xã Bắc Ninh Hoà", "Xã Nam Ninh Hoà", "Bắc Nha Trang"])
-        
+            
         with col_c2:
-            st.info("💡 **Hệ thống sẽ tự động nhận diện:** Tàu hết hạn GPKTTS (Áp dụng với mọi tàu) và Tàu hết hạn Đăng kiểm (Chỉ áp dụng với tàu có Lmax ≥ 12m).")
+            st.info("💡 **Tùy chọn lọc vi phạm:** Bạn có thể tự chọn tiêu chí quét tàu hết hạn tùy theo nghiệp vụ kiểm tra.")
+            
+            # TÍNH NĂNG MỚI: CHỌN ĐIỀU KIỆN LỌC
+            filter_mode = st.selectbox("🎯 Lọc tàu vi phạm dựa trên:", [
+                "1. Kết hợp (Hết GPKTTS với mọi tàu + Hết Đăng kiểm với tàu ≥ 12m)",
+                "2. Chỉ lọc tàu hết hạn Giấy phép KTTS",
+                "3. Chỉ lọc tàu hết hạn Đăng kiểm"
+            ])
+            
             selected_date = st.text_input("Mốc thời gian quy chiếu (Bỏ trống = Tính đến hôm nay):", placeholder="VD: 30/06/2026")
             split_expired = st.checkbox("Tách mỗi Xã/Phường thành 1 Sheet riêng (Đối với Tàu Hết hạn)")
             
         st.markdown('<div class="btn-success">', unsafe_allow_html=True)
         if st.button("▶ PHÂN TÍCH & XUẤT BÁO CÁO TỔNG HỢP"):
-            with st.spinner("Trí tuệ nhân tạo đang phân tích chéo pháp lý từng tàu..."):
+            with st.spinner("Trí tuệ nhân tạo đang phân tích dữ liệu..."):
                 col_diachi_goc = mmap.get('DIA_CHI', '')
                 if not col_diachi_goc: 
-                    st.error("Không tìm thấy Cột Địa chỉ trong file!")
+                    st.error("Không tìm thấy Cột Địa chỉ trong file CSDL gốc!")
                 else:
                     df_raw['Xã/Phường mới'] = df_raw[col_diachi_goc].apply(get_new_address)
                     df_filtered = df_raw[df_raw['Xã/Phường mới'].notna()].copy()
@@ -533,7 +541,6 @@ elif menu == "📊 Lọc & Xuất báo cáo":
                     if col_cccd and col_cccd in df_filtered.columns:
                         df_filtered[col_cccd] = df_filtered[col_cccd].apply(lambda x: str(x).strip().split('.')[0].zfill(12) if pd.notna(x) and str(x).strip().split('.')[0].isdigit() else x)
 
-                    # XỬ LÝ LỌC KẾT HỢP (GPKTTS và ĐĂNG KIỂM THEO LMAX)
                     target_date = pd.to_datetime(selected_date, dayfirst=True) if selected_date else pd.Timestamp.now().normalize()
                     
                     df_filtered['Lmax_num'] = pd.to_numeric(df_filtered[mmap.get('LMAX', '')], errors='coerce') if 'LMAX' in mmap else 0
@@ -550,13 +557,17 @@ elif menu == "📊 Lọc & Xuất báo cáo":
                     dt_gp = parse_dates_safe(df_filtered[col_gp]) if col_gp in df_filtered.columns else pd.Series(pd.NaT, index=df_filtered.index)
                     dt_dk = parse_dates_safe(df_filtered[col_dk]) if col_dk in df_filtered.columns else pd.Series(pd.NaT, index=df_filtered.index)
                     
-                    # Logic kiểm tra pháp lý lõi
                     is_exp_gp = dt_gp < target_date
                     is_exp_dk = dt_dk < target_date
                     is_ge_12 = df_filtered['Lmax_num'] >= 12
                     
-                    # Tàu vi phạm = Hết GPKTTS HOẶC (Trên 12m VÀ Hết Đăng kiểm)
-                    df_filtered['_da_het_han'] = is_exp_gp | (is_ge_12 & is_exp_dk)
+                    # LOGIC LỌC TÙY BIẾN
+                    if filter_mode.startswith("1"):
+                        df_filtered['_da_het_han'] = is_exp_gp | (is_ge_12 & is_exp_dk)
+                    elif filter_mode.startswith("2"):
+                        df_filtered['_da_het_han'] = is_exp_gp
+                    elif filter_mode.startswith("3"):
+                        df_filtered['_da_het_han'] = is_exp_dk
 
                     if len(df_filtered) == 0: 
                         st.warning("Không có tàu nào thỏa mãn điều kiện lọc!")
@@ -590,7 +601,6 @@ elif menu == "📊 Lọc & Xuất báo cáo":
                             if col != 'Xã/Phường mới': tong_cong_row[col] = df_thong_ke[col].sum()
                         df_thong_ke = pd.concat([df_thong_ke, pd.DataFrame([tong_cong_row])], ignore_index=True)
 
-                        # Bắt buộc thêm cột GP và DK vào báo cáo vi phạm để đối chiếu
                         df_hh_full = df_filtered[df_filtered['_da_het_han'] == True].copy()
                         cols_hh = [c for c in selected_cols if c in df_hh_full.columns]
                         if col_gp and col_gp not in cols_hh and col_gp in df_hh_full.columns: cols_hh.append(col_gp)
