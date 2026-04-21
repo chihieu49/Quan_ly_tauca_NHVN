@@ -598,3 +598,144 @@ elif menu == "📊 Lọc & Xuất báo cáo":
                                         dl.to_excel(writer, sheet_name=f"HH_{str(loc).replace('/', '_').replace(chr(92), '_')}"[:31], index=False)
                         st.download_button("📥 XÁC NHẬN TẢI BÁO CÁO EXCEL", data=output.getvalue(), file_name=f"Bao_Cao_Loc_TauCa_{datetime.now().strftime('%d%m%Y')}.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
         st.markdown('</div>', unsafe_allow_html=True)
+        # ---------------------------------------------------------
+# TAB 4: LỌC DỮ LIỆU & XUẤT BÁO CÁO (LẤY TỪ MASTER DB)
+# ---------------------------------------------------------
+elif menu == "📊 Lọc & Xuất báo cáo":
+    st.header("📊 LỌC DỮ LIỆU & XUẤT BÁO CÁO")
+    
+    if df_db is None:
+        st.warning("⚠️ Cơ sở dữ liệu đang trống. Vui lòng sang tab **⚙️ Quản lý Hệ thống & QR** để nạp dữ liệu trước khi lọc báo cáo.")
+    else:
+        df_raw = df_db.copy()
+        all_cols = list(df_raw.columns)
+        
+        st.markdown("### 1. Thiết lập xuất báo cáo")
+        col_c1, col_c2 = st.columns(2)
+        with col_c1:
+            selected_cols = st.multiselect("Cột sẽ xuất ra báo cáo:", all_cols, default=[c for c in all_cols if c in mmap.values()])
+            selected_commune = st.selectbox("Lọc theo Địa phương:", ["Tất cả", "Xã Đại Lãnh", "Xã Tu Bông", "Xã Vạn Hưng", "Xã Vạn Ninh", "Xã Vạn Thắng", "Phường Đông Ninh Hoà", "Phường Hoà Thắng", "Xã Bắc Ninh Hoà", "Xã Nam Ninh Hoà", "Bắc Nha Trang"])
+        with col_c2:
+            idx = all_cols.index(mmap['HAN_DK']) if 'HAN_DK' in mmap else (all_cols.index(mmap['HAN_GP']) if 'HAN_GP' in mmap else 0)
+            selected_date_col = st.selectbox("Cột Mốc Tính Hạn (Dành cho Lọc Thường):", all_cols, index=idx)
+            selected_date = st.text_input("Lọc đến ngày (Bỏ trống lấy tất cả):", placeholder="VD: 30/06/2026")
+            split_expired = st.checkbox("Tách mỗi Xã/Phường thành 1 Sheet (Đối với Tàu Hết hạn)")
+            
+        st.markdown("### 2. Bộ lọc Nâng cao (Kiểm soát Vi phạm)")
+        # TÍNH NĂNG MỚI: CHECKBOX LỌC ĐA ĐIỀU KIỆN
+        filter_vipham = st.checkbox("🚨 Báo cáo Đặc biệt: Chỉ lọc Tàu có Lmax ≥ 12m VÀ Hết cả 2 hạn (Đăng kiểm & Giấy phép)")
+            
+        st.markdown('<div class="btn-success">', unsafe_allow_html=True)
+        if st.button("▶ XEM TRƯỚC DASHBOARD & XUẤT BÁO CÁO"):
+            with st.spinner("Hệ thống AI đang phân tích đa điều kiện..."):
+                col_diachi_goc = mmap.get('DIA_CHI', '')
+                if not col_diachi_goc: st.error("Không tìm thấy Cột Địa chỉ trong file!")
+                else:
+                    df_raw['Xã/Phường mới'] = df_raw[col_diachi_goc].apply(get_new_address)
+                    df_filtered = df_raw[df_raw['Xã/Phường mới'].notna()].copy()
+                    if selected_commune != "Tất cả": df_filtered = df_filtered[df_filtered['Xã/Phường mới'] == selected_commune]
+
+                    col_cccd = mmap.get('CCCD', '')
+                    if col_cccd and col_cccd in df_filtered.columns:
+                        df_filtered[col_cccd] = df_filtered[col_cccd].apply(lambda x: str(x).strip().split('.')[0].zfill(12) if pd.notna(x) and str(x).strip().split('.')[0].isdigit() else x)
+
+                    # Ép kiểu dữ liệu Lmax để tính toán toán học (>= 12)
+                    df_filtered['Lmax_num'] = pd.to_numeric(df_filtered[mmap.get('LMAX', '')], errors='coerce') if 'LMAX' in mmap else 0
+                    
+                    target_date = pd.to_datetime(selected_date, dayfirst=True) if selected_date != "" else pd.Timestamp.now().normalize()
+                    
+                    # Hàm chuẩn hóa ngày tháng chống lỗi năm 19xx
+                    def parse_dt(col_name):
+                        if col_name not in df_filtered.columns: return pd.Series([pd.NaT]*len(df_filtered), index=df_filtered.index)
+                        d = pd.to_datetime(df_filtered[col_name], dayfirst=True, errors='coerce')
+                        m = (d.dt.year < 1950) & d.notna()
+                        if m.any(): d.loc[m] = d.loc[m].apply(lambda x: x.replace(year=x.year + 100))
+                        return d
+
+                    # XỬ LÝ LOGIC LỌC
+                    if filter_vipham:
+                        col_hdk = mmap.get('HAN_DK')
+                        col_hgp = mmap.get('HAN_GP')
+                        if not col_hdk or not col_hgp:
+                            st.error("CSDL thiếu cột Hạn Đăng kiểm hoặc Giấy phép để đối chiếu chéo!")
+                            st.stop()
+                            
+                        dt_hdk = parse_dt(col_hdk)
+                        dt_hgp = parse_dt(col_hgp)
+                        
+                        # Gộp 3 điều kiện: Lmax >= 12 AND DK < target AND GP < target
+                        cond_lmax = df_filtered['Lmax_num'] >= 12
+                        cond_dk = dt_hdk < target_date
+                        cond_gp = dt_hgp < target_date
+                        
+                        df_filtered = df_filtered[cond_lmax & cond_dk & cond_gp]
+                        df_filtered['_da_het_han'] = True
+                        df_filtered['Ngày_dt_temp'] = dt_hdk # Biến phụ để code dưới không lỗi
+                    else:
+                        # Lọc thông thường 1 cột
+                        df_filtered['Ngày_dt_temp'] = parse_dt(selected_date_col)
+                        if selected_date != "": 
+                            df_filtered = df_filtered[df_filtered['Ngày_dt_temp'] <= target_date]
+                        df_filtered['_da_het_han'] = df_filtered['Ngày_dt_temp'] < pd.Timestamp.now().normalize()
+
+                    if len(df_filtered) == 0: st.warning("Không có tàu nào thỏa mãn điều kiện lọc!")
+                    else:
+                        df_final = pd.DataFrame({col: df_filtered[col] for col in selected_cols if col in df_filtered.columns})
+                        df_final.insert(0, 'TT', range(1, len(df_final) + 1))
+
+                        def pl(lmax):
+                            if pd.isna(lmax): return 'Không rõ'
+                            if lmax < 6: return '<6'
+                            if 6 <= lmax < 12: return '6 đến <12'
+                            if 12 <= lmax < 15: return '12 đến <15'
+                            if 15 <= lmax < 24: return '15 đến <24'
+                            return '>=24'
+
+                        df_filtered['Nhom_Lmax'] = df_filtered['Lmax_num'].apply(pl)
+                        col_id = mmap.get('SO_DANG_KY', df_filtered.columns[0])
+                        df_thong_ke_main = df_filtered.groupby('Xã/Phường mới').agg(Tong_tau=(col_id, 'count'), Tau_het_han=('_da_het_han', 'sum')).reset_index()
+                        lmax_pivot = pd.crosstab(df_filtered['Xã/Phường mới'], df_filtered['Nhom_Lmax']).reset_index()
+                        df_thong_ke = pd.merge(df_thong_ke_main, lmax_pivot, on='Xã/Phường mới', how='left')
+
+                        for col in ['<6', '6 đến <12', '12 đến <15', '15 đến <24', '>=24', 'Không rõ']:
+                            if col not in df_thong_ke.columns: df_thong_ke[col] = 0
+
+                        df_thong_ke.rename(columns={'Tong_tau': 'Tổng số tàu', 'Tau_het_han': 'Tàu hết hạn'}, inplace=True)
+                        final_cols_tk = ['Xã/Phường mới', 'Tổng số tàu', 'Tàu hết hạn'] + [c for c in ['<6', '6 đến <12', '12 đến <15', '15 đến <24', '>=24', 'Không rõ'] if df_thong_ke[c].sum() > 0]
+                        df_thong_ke = df_thong_ke[final_cols_tk]
+
+                        tong_cong_row = {'Xã/Phường mới': 'TỔNG CỘNG'}
+                        for col in df_thong_ke.columns:
+                            if col != 'Xã/Phường mới': tong_cong_row[col] = df_thong_ke[col].sum()
+                        df_thong_ke = pd.concat([df_thong_ke, pd.DataFrame([tong_cong_row])], ignore_index=True)
+
+                        df_hh_full = df_filtered[df_filtered['_da_het_han'] == True].copy()
+                        cols_hh = [c for c in selected_cols if c in df_hh_full.columns]
+                        if not filter_vipham and selected_date_col not in cols_hh and selected_date_col in df_hh_full.columns: cols_hh.append(selected_date_col)
+                        df_hh_exp = df_hh_full[cols_hh].copy()
+                        if not df_hh_exp.empty: df_hh_exp.insert(0, 'TT', range(1, len(df_hh_exp) + 1))
+
+                        st.markdown("---")
+                        st.markdown(f"### 📊 DASHBOARD TỔNG HỢP {'(BÁO CÁO VI PHẠM LMAX ≥ 12M)' if filter_vipham else ''}")
+                        m1, m2, m3 = st.columns(3)
+                        m1.metric("TỔNG SỐ TÀU LỌC ĐƯỢC", tong_cong_row['Tổng số tàu'])
+                        m2.metric("SỐ TÀU ĐÃ HẾT HẠN", tong_cong_row['Tàu hết hạn'])
+                        m3.metric("TỶ LỆ", f"{round((tong_cong_row['Tàu hết hạn'] / tong_cong_row['Tổng số tàu'] * 100), 1) if tong_cong_row['Tổng số tàu'] > 0 else 0}%")
+                        st.dataframe(df_thong_ke, use_container_width=True, hide_index=True)
+
+                        output = io.BytesIO()
+                        with pd.ExcelWriter(output, engine='openpyxl') as writer:
+                            df_final.to_excel(writer, sheet_name='Danh sách chi tiết', index=False)
+                            df_thong_ke.to_excel(writer, sheet_name='Bảng thống kê', index=False)
+                            if not df_hh_exp.empty: 
+                                sheet_hh_name = 'Tàu Vi Phạm (Tổng)' if filter_vipham else 'Tàu Hết Hạn (Tổng)'
+                                df_hh_exp.to_excel(writer, sheet_name=sheet_hh_name, index=False)
+                                if split_expired:
+                                    for loc in df_hh_full['Xã/Phường mới'].dropna().unique():
+                                        dl = df_hh_full[df_hh_full['Xã/Phường mới'] == loc][cols_hh].copy()
+                                        dl.insert(0, 'TT', range(1, len(dl) + 1))
+                                        dl.to_excel(writer, sheet_name=f"VP_{str(loc).replace('/', '_').replace(chr(92), '_')}"[:31] if filter_vipham else f"HH_{str(loc).replace('/', '_').replace(chr(92), '_')}"[:31], index=False)
+                        
+                        dl_name = f"Bao_Cao_Vi_Pham_Lmax12_{datetime.now().strftime('%d%m%Y')}.xlsx" if filter_vipham else f"Bao_Cao_Loc_TauCa_{datetime.now().strftime('%d%m%Y')}.xlsx"
+                        st.download_button("📥 XÁC NHẬN TẢI BÁO CÁO EXCEL", data=output.getvalue(), file_name=dl_name, mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+        st.markdown('</div>', unsafe_allow_html=True)
