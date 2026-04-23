@@ -241,6 +241,7 @@ if "tau" in params:
 <div style="text-align:center; padding: 20px; color: #adb5bd; font-size: 12px; font-family:sans-serif;">Cấp bởi Chi cục Thủy sản NHVN</div>"""
     st.markdown(html_mobile, unsafe_allow_html=True)
     if st.button("🔙 Quét mã khác / Quay lại Trang chủ", use_container_width=True):
+        st.session_state["search_mode"] = "📷 Quét QR Tự động (Camera)"
         st.query_params.clear()
         st.rerun()
     st.stop()
@@ -272,16 +273,20 @@ if menu == "🔍 Tra cứu thông tin":
     if df_db is None:
         st.warning("⚠️ Cơ sở dữ liệu đang trống. Vui lòng sang tab **⚙️ Quản lý Hệ thống & QR** để nạp dữ liệu trước khi tra cứu.")
     else:
-        tab_text, tab_qr = st.tabs(["⌨️ Nhập tay", "📷 Quét QR Tự động (Camera)"])
+        search_mode = st.radio("Chọn phương thức tra cứu:", ["⌨️ Nhập tay", "📷 Quét QR Tự động (Camera)"], 
+                               horizontal=True, 
+                               index=1 if st.session_state.get("search_mode") == "📷 Quét QR Tự động (Camera)" else 0)
         
-        with tab_text:
+        if search_mode == "⌨️ Nhập tay":
+            st.session_state["search_mode"] = "⌨️ Nhập tay"
             col_s1, col_s2, col_s3 = st.columns([3, 1, 1])
             with col_s1: keyword = st.text_input("Nhập từ khóa:", placeholder="Số đăng ký hoặc tên chủ tàu...")
             with col_s2: search_type = st.selectbox("Tìm theo", ["Tất cả", "Số đăng ký", "Tên chủ tàu"])
             with col_s3: 
                 st.write("##"); btn_search = st.button("🔍 TÌM KIẾM")
                 
-        with tab_qr:
+        else:
+            st.session_state["search_mode"] = "📷 Quét QR Tự động (Camera)"
             st.info("💡 **Hướng dẫn:** Cho phép trình duyệt truy cập Camera. Đưa mã QR vào khung hình, ứng dụng sẽ tự động quét và tải hồ sơ.")
             import streamlit.components.v1 as components
             import os
@@ -318,11 +323,7 @@ if menu == "🔍 Tra cứu thông tin":
       function onScanSuccess(decodedText, decodedResult) {
         if (!isScanned) {
             isScanned = true;
-            html5QrcodeScanner.clear().then(() => {
-                sendDataToPython(decodedText + "|||" + Date.now());
-            }).catch(error => {
-                sendDataToPython(decodedText + "|||" + Date.now());
-            });
+            sendDataToPython(decodedText + "|||" + Date.now());
         }
       }
       var html5QrcodeScanner = new Html5QrcodeScanner("qr-reader", { fps: 10, qrbox: {width: 250, height: 250} }, false);
