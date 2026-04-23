@@ -292,9 +292,8 @@ if menu == "🔍 Tra cứu thông tin":
                 os.makedirs(component_path)
             
             index_path = os.path.join(component_path, "index.html")
-            if not os.path.exists(index_path):
-                with open(index_path, "w", encoding="utf-8") as f:
-                    f.write("""<!DOCTYPE html>
+            with open(index_path, "w", encoding="utf-8") as f:
+                f.write("""<!DOCTYPE html>
 <html>
   <head>
     <meta charset="utf-8" />
@@ -315,11 +314,15 @@ if menu == "🔍 Tra cứu thông tin":
   <body onload="init()" style="margin:0; padding:0;">
     <div id="qr-reader" style="width:100%; max-width:500px; margin:auto;"></div>
     <script>
-      let lastScanned = "";
+      let isScanned = false;
       function onScanSuccess(decodedText, decodedResult) {
-        if (decodedText !== lastScanned) {
-            lastScanned = decodedText;
-            sendDataToPython(decodedText);
+        if (!isScanned) {
+            isScanned = true;
+            html5QrcodeScanner.clear().then(() => {
+                sendDataToPython(decodedText + "|||" + Date.now());
+            }).catch(error => {
+                sendDataToPython(decodedText + "|||" + Date.now());
+            });
         }
       }
       var html5QrcodeScanner = new Html5QrcodeScanner("qr-reader", { fps: 10, qrbox: {width: 250, height: 250} }, false);
@@ -329,23 +332,26 @@ if menu == "🔍 Tra cứu thông tin":
 </html>""")
 
             qr_scanner = components.declare_component("qr_scanner", path=component_path)
-            qr_data = qr_scanner()
+            scan_key = st.session_state.get("scan_key", 0)
+            qr_data = qr_scanner(key=f"qr_scanner_{scan_key}")
             
             if qr_data:
+                qr_text = qr_data.split("|||")[0] if "|||" in qr_data else qr_data
                 vessel_id = None
                 try:
-                    parsed_url = urllib.parse.urlparse(qr_data)
+                    parsed_url = urllib.parse.urlparse(qr_text)
                     params_url = urllib.parse.parse_qs(parsed_url.query)
                     if "tau" in params_url:
                         vessel_id = params_url["tau"][0].strip().upper()
-                    elif "?tau=" in qr_data:
-                        vessel_id = qr_data.split("?tau=")[-1].split("&")[0].strip().upper()
-                    elif len(qr_data) <= 15 and " " not in qr_data:
-                        vessel_id = qr_data.strip().upper()
+                    elif "?tau=" in qr_text:
+                        vessel_id = qr_text.split("?tau=")[-1].split("&")[0].strip().upper()
+                    elif len(qr_text) <= 15 and " " not in qr_text:
+                        vessel_id = qr_text.strip().upper()
                 except Exception:
                     pass
                 
                 if vessel_id:
+                    st.session_state["scan_key"] = scan_key + 1
                     st.query_params["tau"] = vessel_id
                     st.rerun()
 
