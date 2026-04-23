@@ -163,8 +163,20 @@ def generate_qr_code(vessel_id, base_url):
 
 @st.cache_data
 def load_master_db():
+    pkl_file = DB_FILE.replace(".xlsx", ".pkl")
+    if os.path.exists(pkl_file):
+        try:
+            df = pd.read_pickle(pkl_file)
+            return df, map_columns(df.columns)
+        except Exception:
+            pass
+
     if os.path.exists(DB_FILE):
         df = read_excel_auto_header(DB_FILE)
+        try:
+            df.to_pickle(pkl_file)
+        except Exception:
+            pass
         return df, map_columns(df.columns)
     return None, {}
 
@@ -444,9 +456,16 @@ elif menu == "⚙️ Quản lý Hệ thống & QR":
         st.markdown("Tải lên file Excel danh sách tàu cá mới nhất. Hệ thống sẽ tự động lưu lại để cán bộ quét mã QR có thể truy xuất.")
         uploaded_db = st.file_uploader("Chọn file Excel CSDL", type=["xlsx", "xls"])
         if uploaded_db:
-            with open(DB_FILE, "wb") as f: f.write(uploaded_db.getbuffer())
-            load_master_db.clear()
-            st.success("✅ Đã cập nhật CSDL lên máy chủ thành công!")
+            with st.spinner("⏳ Đang xử lý và Tối ưu hóa dữ liệu (chỉ mất vài giây cho lần đầu tiên)..."):
+                with open(DB_FILE, "wb") as f: f.write(uploaded_db.getbuffer())
+                
+                # Tạo bản sao Pickle siêu tốc
+                df = read_excel_auto_header(DB_FILE)
+                pkl_file = DB_FILE.replace(".xlsx", ".pkl")
+                df.to_pickle(pkl_file)
+                
+                load_master_db.clear()
+            st.success("✅ Đã cập nhật và Tối ưu hóa CSDL lên máy chủ thành công!")
             st.rerun()
 
     if df_db is not None:
