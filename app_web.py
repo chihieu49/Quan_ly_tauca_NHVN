@@ -284,26 +284,30 @@ if menu == "🔍 Tra cứu thông tin":
         with tab_qr:
             st.info("💡 **Hướng dẫn:** Cho phép trình duyệt truy cập Camera. Đưa mã QR vào khung hình, ứng dụng sẽ tự động quét và tải hồ sơ.")
             import streamlit.components.v1 as components
-            components.html("""
-            <div id="qr-reader" style="width:100%; max-width:500px; margin:auto;"></div>
-            <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
-            <script>
-                function onScanSuccess(decodedText, decodedResult) {
-                    var tau = decodedText;
-                    try {
-                        if (decodedText.includes("tau=")) {
-                            tau = decodedText.split("tau=")[1].split("&")[0];
-                        }
-                    } catch(e) {}
-                    
-                    var currentUrl = window.parent.location.origin + window.parent.location.pathname;
-                    window.parent.location.href = currentUrl + "?tau=" + encodeURIComponent(tau);
-                }
-                var html5QrcodeScanner = new Html5QrcodeScanner(
-                    "qr-reader", { fps: 10, qrbox: {width: 250, height: 250} }, false);
-                html5QrcodeScanner.render(onScanSuccess);
-            </script>
-            """, height=400)
+            import os
+            import urllib.parse
+            
+            component_path = os.path.join(os.path.dirname(__file__), "qr_scanner_component")
+            qr_scanner = components.declare_component("qr_scanner", path=component_path)
+            qr_data = qr_scanner()
+            
+            if qr_data:
+                vessel_id = None
+                try:
+                    parsed_url = urllib.parse.urlparse(qr_data)
+                    params_url = urllib.parse.parse_qs(parsed_url.query)
+                    if "tau" in params_url:
+                        vessel_id = params_url["tau"][0].strip().upper()
+                    elif "?tau=" in qr_data:
+                        vessel_id = qr_data.split("?tau=")[-1].split("&")[0].strip().upper()
+                    elif len(qr_data) <= 15 and " " not in qr_data:
+                        vessel_id = qr_data.strip().upper()
+                except Exception:
+                    pass
+                
+                if vessel_id:
+                    st.query_params["tau"] = vessel_id
+                    st.rerun()
 
         st.markdown("---")
         if btn_search or keyword:
