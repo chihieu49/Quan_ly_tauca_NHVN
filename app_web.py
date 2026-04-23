@@ -161,6 +161,7 @@ def generate_qr_code(vessel_id, base_url):
     img.save(buf, format="PNG")
     return buf.getvalue()
 
+@st.cache_data
 def load_master_db():
     if os.path.exists(DB_FILE):
         df = read_excel_auto_header(DB_FILE)
@@ -444,6 +445,7 @@ elif menu == "⚙️ Quản lý Hệ thống & QR":
         uploaded_db = st.file_uploader("Chọn file Excel CSDL", type=["xlsx", "xls"])
         if uploaded_db:
             with open(DB_FILE, "wb") as f: f.write(uploaded_db.getbuffer())
+            load_master_db.clear()
             st.success("✅ Đã cập nhật CSDL lên máy chủ thành công!")
             st.rerun()
 
