@@ -5,6 +5,12 @@ import io
 import os
 import qrcode
 import zipfile
+import urllib.parse
+from PIL import Image
+try:
+    from pyzbar.pyzbar import decode as pyzbar_decode
+except ImportError:
+    pyzbar_decode = None
 
 # =========================================================
 # CẤU HÌNH TRANG & GIAO DIỆN
@@ -248,7 +254,7 @@ with st.sidebar:
     app_domain = st.text_input("🌐 Tên miền Web (Dùng tạo mã QR):", value="https://quanlytaucanhvn-29032026.streamlit.app")
     
     st.markdown("---")
-    menu = st.radio("MENU CHÍNH", ["🔍 Tra cứu thông tin", "⚙️ Quản lý Hệ thống & QR", "🔄 Đối chiếu dữ liệu", "📊 Lọc & Xuất báo cáo"])
+    menu = st.radio("MENU CHÍNH", ["🔍 Tra cứu thông tin", "📷 Quét mã QR (Mobile)", "⚙️ Quản lý Hệ thống & QR", "🔄 Đối chiếu dữ liệu", "📊 Lọc & Xuất báo cáo"])
     st.markdown("---")
     st.caption("© 2026 - Chi cục Thủy sản NHVN")
 
@@ -344,6 +350,123 @@ if menu == "🔍 Tra cứu thông tin":
                         with col_qr2:
                             st.info(f"Mã QR cấp riêng cho tàu **{s_item['Số đăng ký']}**.")
                             st.download_button("🖨️ TẢI ẢNH MÃ QR ĐỂ IN", data=qr_bytes, file_name=f"QR_CODE_{s_item['Số đăng ký']}.png", mime="image/png")
+
+# ---------------------------------------------------------
+# TAB 1.5: QUÉT MÃ QR BẰNG CAMERA (MOBILE)
+# ---------------------------------------------------------
+elif menu == "📷 Quét mã QR (Mobile)":
+    st.header("📷 QUÉT MÃ QR BẰNG CAMERA")
+    st.markdown("Sử dụng camera của thiết bị di động (hoặc máy tính) để quét thẻ QR của tàu cá.")
+    
+    if df_db is None:
+        st.warning("⚠️ Cơ sở dữ liệu đang trống. Vui lòng nạp dữ liệu trước.")
+    else:
+        st.info("💡 **Gợi ý:** Để điện thoại dọc, đưa camera quét toàn bộ hình vuông QR thật rõ nét.")
+        img_file_buffer = st.camera_input("Hướng camera vào mã QR")
+        
+        if img_file_buffer is not None:
+            with st.spinner("Đang phân tích hình ảnh..."):
+                try:
+                    img = Image.open(img_file_buffer)
+                    decoded_objects = []
+                    if pyzbar_decode is not None:
+                        decoded_objects = pyzbar_decode(img)
+                    
+                    qr_data = None
+                    if decoded_objects:
+                        qr_data = decoded_objects[0].data.decode("utf-8")
+                    else:
+                        # Thử dự phòng bằng OpenCV
+                        try:
+                            import cv2
+                            import numpy as np
+                            img_file_buffer.seek(0)
+                            file_bytes = np.asarray(bytearray(img_file_buffer.read()), dtype=np.uint8)
+                            img_cv2 = cv2.imdecode(file_bytes, 1)
+                            detector = cv2.QRCodeDetector()
+                            data, bbox, _ = detector.detectAndDecode(img_cv2)
+                            if data:
+                                qr_data = data
+                        except Exception:
+                            pass
+
+                    if qr_data:
+                        parsed_url = urllib.parse.urlparse(qr_data)
+                        params_url = urllib.parse.parse_qs(parsed_url.query)
+                        
+                        vessel_id = None
+                        if "tau" in params_url:
+                            vessel_id = params_url["tau"][0].strip().upper()
+                        elif "?tau=" in qr_data:
+                            vessel_id = qr_data.split("?tau=")[-1].split("&")[0].strip().upper()
+                        elif len(qr_data) <= 15 and " " not in qr_data:
+                            # Nếu mã QR chỉ chứa trực tiếp số đăng ký (ví dụ: KH12345TS)
+                            vessel_id = qr_data.strip().upper()
+                        
+                        if vessel_id:
+                            st.success(f"✅ Đã quét thành công! Đang tải hồ sơ tàu **{vessel_id}**...")
+                            
+                            col_dk = mmap.get('SO_DANG_KY')
+                            if not col_dk:
+                                st.error("⚠️ CSDL lỗi cấu trúc.")
+                            else:
+                                vessel_data = df_db[df_db[col_dk].astype(str).str.strip().str.upper() == vessel_id]
+                                if vessel_data.empty:
+                                    st.error(f"❌ Mã QR hợp lệ ({vessel_id}) nhưng không tìm thấy dữ liệu tàu này trong Hệ thống.")
+                                else:
+                                    row = vessel_data.iloc[0]
+                                    def _v(alias, is_id=False):
+                                        c = mmap.get(alias)
+                                        if not c or c not in df_db.columns: return "-"
+                                        val = row[c]
+                                        if pd.isna(val) or str(val).lower() in ['nan', 'none', 'nat']: return "-"
+                                        if is_id:
+                                            s = str(val).split('.')[0].strip()
+                                            if alias == 'CCCD': return s.zfill(12) if s.isdigit() else s
+                                            if alias == 'SDT': return ('0' + s) if s.isdigit() and not s.startswith('0') else s
+                                        if alias in ['HAN_GP', 'HAN_DK']:
+                                            try:
+                                                p = pd.to_datetime(val, errors='coerce', dayfirst=True)
+                                                return p.strftime('%d/%m/%Y') if pd.notna(p) else str(val).split(' ')[0]
+                                            except: return str(val)
+                                        if not isinstance(val, str) and str(val).endswith('.0'): return str(val)[:-2]
+                                        return str(val).strip()
+
+                                    chu_tau = _v('CHU_TAU'); cccd = _v('CCCD', True); sdt = _v('SDT', True)
+                                    dc_cu = _v('DIA_CHI')
+                                    dc_moi = get_new_address(dc_cu)
+                                    dc_hien_thi = dc_moi if dc_moi else dc_cu
+                                    
+                                    lmax = _v('LMAX'); cs = _v('CONG_SUAT'); nghe = _v('NGHE')
+                                    hdk = _v('HAN_DK'); hgp = _v('HAN_GP')
+                                    
+                                    hdk_css = "m-alert-red" if check_expired(hdk) else "m-alert-green"
+                                    hdk_txt = "ĐÃ HẾT HẠN" if check_expired(hdk) else "ĐANG CÒN HẠN"
+                                    
+                                    hgp_css = "m-alert-red" if check_expired(hgp) else "m-alert-green"
+                                    hgp_txt = "ĐÃ HẾT HẠN" if check_expired(hgp) else "ĐANG CÒN HẠN"
+
+                                    html_mobile = f'''<div class="mobile-container" style="max-width: 100%; margin-top: 10px;">
+<div class="m-header"><h4>HỒ SƠ TÀU CÁ</h4><h1>{vessel_id}</h1><div class="m-badge">📍 {dc_hien_thi}</div></div>
+<div class="m-body">
+<div class="m-section"><div class="m-title">🛡️ TÌNH TRẠNG PHÁP LÝ</div>
+<div class="m-grid"><div class="m-alert-box {hdk_css}"><div class="m-alert-title">Đăng kiểm</div><div class="m-alert-val">{hdk}</div><div style="font-size:10px; margin-top:2px;">{hdk_txt}</div></div>
+<div class="m-alert-box {hgp_css}"><div class="m-alert-title">Giấy phép</div><div class="m-alert-val">{hgp}</div><div style="font-size:10px; margin-top:2px;">{hgp_txt}</div></div></div></div>
+<div class="m-section"><div class="m-title">👤 THÔNG TIN CHỦ TÀU</div>
+<div class="m-row"><span class="m-label">Họ và tên</span><span class="m-val" style="color:#0d6efd; font-size:18px;">{chu_tau}</span></div>
+<div class="m-grid"><div class="m-row"><span class="m-label">Số CCCD/CMND</span><span class="m-val">{cccd}</span></div><div class="m-row"><span class="m-label">Số điện thoại</span><span class="m-val">{sdt}</span></div></div>
+<div class="m-row"><span class="m-label">Địa chỉ gốc</span><span class="m-val" style="font-size: 14px; font-weight: normal;">{dc_cu}</span></div></div>
+<div class="m-section"><div class="m-title">⚙️ THÔNG SỐ KỸ THUẬT</div>
+<div class="m-row"><span class="m-label">Nghề khai thác</span><span class="m-val">{nghe}</span></div>
+<div class="m-grid"><div class="m-row"><span class="m-label">Chiều dài Lmax</span><span class="m-val">{lmax} m</span></div><div class="m-row"><span class="m-label">Công suất máy</span><span class="m-val">{cs} KW</span></div></div></div>
+</div></div>'''
+                                    st.markdown(html_mobile, unsafe_allow_html=True)
+                        else:
+                            st.warning(f"Mã QR không chứa thông tin tàu hợp lệ. Dữ liệu gốc: {qr_data}")
+                    else:
+                        st.error("❌ Không thể tìm thấy mã QR trong ảnh. Vui lòng thử chụp lại.")
+                except Exception as e:
+                    st.error(f"Lỗi khi xử lý hình ảnh: {e}")
 
 # ---------------------------------------------------------
 # TAB 2: QUẢN LÝ DỮ LIỆU & TẠO MÃ QR HÀNG LOẠT
