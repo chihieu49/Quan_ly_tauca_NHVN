@@ -288,6 +288,46 @@ if menu == "🔍 Tra cứu thông tin":
             import urllib.parse
             
             component_path = os.path.join(os.path.dirname(__file__), "qr_scanner_component")
+            if not os.path.exists(component_path):
+                os.makedirs(component_path)
+            
+            index_path = os.path.join(component_path, "index.html")
+            if not os.path.exists(index_path):
+                with open(index_path, "w", encoding="utf-8") as f:
+                    f.write("""<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
+    <script>
+      function sendMessageToStreamlitClient(type, data) {
+        var outData = Object.assign({isStreamlitMessage: true, type: type}, data);
+        window.parent.postMessage(outData, "*");
+      }
+      function init() { sendMessageToStreamlitClient("streamlit:componentReady", {apiVersion: 1}); }
+      function setFrameHeight(height) { sendMessageToStreamlitClient("streamlit:setFrameHeight", {height: height}); }
+      function sendDataToPython(value) { sendMessageToStreamlitClient("streamlit:setComponentValue", {value: value}); }
+      window.addEventListener("message", function(event) {
+        if (event.data.type === "streamlit:render") { setFrameHeight(550); }
+      });
+    </script>
+  </head>
+  <body onload="init()" style="margin:0; padding:0;">
+    <div id="qr-reader" style="width:100%; max-width:500px; margin:auto;"></div>
+    <script>
+      let lastScanned = "";
+      function onScanSuccess(decodedText, decodedResult) {
+        if (decodedText !== lastScanned) {
+            lastScanned = decodedText;
+            sendDataToPython(decodedText);
+        }
+      }
+      var html5QrcodeScanner = new Html5QrcodeScanner("qr-reader", { fps: 10, qrbox: {width: 250, height: 250} }, false);
+      html5QrcodeScanner.render(onScanSuccess);
+    </script>
+  </body>
+</html>""")
+
             qr_scanner = components.declare_component("qr_scanner", path=component_path)
             qr_data = qr_scanner()
             
