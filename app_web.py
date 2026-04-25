@@ -9,6 +9,7 @@ import urllib.parse
 from PIL import Image
 import json
 import re
+import hashlib
 try:
     from pyzbar.pyzbar import decode as pyzbar_decode
 except ImportError:
@@ -86,11 +87,22 @@ DB_FILE = "CSDL_TauCa_Master.xlsx"
 QR_LOG_FILE = "Da_Tao_QR_Log.txt"
 USERS_FILE = "users.json"
 
+def hash_password(password):
+    salt = os.urandom(16).hex()
+    hash_obj = hashlib.sha256((salt + password).encode())
+    return f"{salt}${hash_obj.hexdigest()}"
+
+def verify_password(password, hashed):
+    if "$" not in hashed:
+        return password == hashed
+    salt, hash_val = hashed.split("$")
+    return hashlib.sha256((salt + password).encode()).hexdigest() == hash_val
+
 def load_users():
     if not os.path.exists(USERS_FILE):
         default_users = {
-            "admin": {"password": "admin", "role": "admin", "name": "Quản trị viên", "email": "admin@nhvn.gov.vn", "phone": "admin"},
-            "user": {"password": "user", "role": "user", "name": "Người dùng", "email": "user@nhvn.gov.vn", "phone": "user"}
+            "admin": {"password": hash_password("admin"), "role": "admin", "name": "Quản trị viên", "email": "admin@nhvn.gov.vn", "phone": "admin"},
+            "user": {"password": hash_password("user"), "role": "user", "name": "Người dùng", "email": "user@nhvn.gov.vn", "phone": "user"}
         }
         with open(USERS_FILE, "w", encoding="utf-8") as f:
             json.dump(default_users, f, indent=4, ensure_ascii=False)
@@ -324,7 +336,7 @@ if not st.session_state.logged_in:
                 
                 if submit:
                     user_info = users_db.get(username)
-                    if user_info and user_info.get("password") == password:
+                    if user_info and verify_password(password, user_info.get("password", "")):
                         st.session_state.logged_in = True
                         st.session_state.role = user_info.get("role", "user")
                         st.session_state.name = user_info.get("name", "USER")
@@ -351,6 +363,24 @@ if not st.session_state.logged_in:
                 reg_password = st.text_input("Mật khẩu *", type="password", placeholder="🔒 Nhập mật khẩu")
                 reg_confirm_password = st.text_input("Xác nhận mật khẩu *", type="password", placeholder="🔒 Nhập lại mật khẩu")
                 
+                with st.expander("📄 Đọc Điều khoản sử dụng & Chính sách bảo mật", expanded=False):
+                    st.markdown("""
+                    <div style='font-size: 13px; color: #4b5563;'>
+                    <strong>ĐIỀU KHOẢN SỬ DỤNG</strong><br>
+                    1. <strong>Chấp nhận điều khoản:</strong> Bằng việc tạo tài khoản, bạn đồng ý tuân thủ các Điều khoản sử dụng này.<br>
+                    2. <strong>Tài khoản người dùng:</strong> Bạn phải cung cấp thông tin chính xác và chịu trách nhiệm bảo mật tài khoản.<br>
+                    3. <strong>Sử dụng ứng dụng:</strong> Sử dụng ứng dụng đúng mục đích, tuân thủ pháp luật.<br><br>
+                    
+                    <strong>CHÍNH SÁCH BẢO MẬT</strong><br>
+                    1. <strong>Thu thập thông tin:</strong> Chúng tôi thu thập thông tin bạn cung cấp (họ tên, email, sđt) để cải thiện dịch vụ.<br>
+                    2. <strong>Bảo mật dữ liệu:</strong> Chúng tôi áp dụng các biện pháp kỹ thuật phù hợp để bảo vệ thông tin cá nhân của bạn.<br>
+                    3. <strong>Chia sẻ thông tin:</strong> Chúng tôi không bán, cho thuê thông tin cá nhân của bạn cho bên thứ ba.<br>
+                    4. <strong>Liên hệ:</strong> Nếu có câu hỏi hoặc yêu cầu liên quan đến bảo mật thông tin, vui lòng liên hệ:<br>
+                       - 📧 Email: <strong>chihieu49@gmail.com</strong><br>
+                       - 📞 Hotline: <strong>0916.804.167</strong>
+                    </div>
+                    """, unsafe_allow_html=True)
+                
                 agree_terms = st.checkbox("Tôi đồng ý với Điều khoản sử dụng và Chính sách bảo mật")
                 
                 st.markdown('''
@@ -367,8 +397,16 @@ if not st.session_state.logged_in:
                 submit_reg = st.form_submit_button("Đăng ký")
                 
                 if submit_reg:
+                    email_exists = any(u.get("email") == email for u in users_db.values())
+                    phone_regex = r"^(0|\+84)[3|5|7|8|9][0-9]{8}$"
+                    email_regex = r"^[\w\.-]+@[\w\.-]+\.\w+$"
+                    
                     if not full_name or not email or not phone or not reg_password or not reg_confirm_password:
                         st.error("⚠️ Vui lòng điền đầy đủ các trường bắt buộc (*)")
+                    elif not re.match(email_regex, email):
+                        st.error("⚠️ Định dạng Email không hợp lệ!")
+                    elif not re.match(phone_regex, phone):
+                        st.error("⚠️ Định dạng Số điện thoại không hợp lệ (VD: 0912345678)!")
                     elif reg_password != reg_confirm_password:
                         st.error("⚠️ Mật khẩu xác nhận không khớp!")
                     elif len(reg_password) < 8 or not re.search(r"[a-z]", reg_password) or not re.search(r"[A-Z]", reg_password) or not re.search(r"[0-9]", reg_password) or not re.search(r"[!@#$%^&*(),.?\":{}|<>]", reg_password):
@@ -379,9 +417,11 @@ if not st.session_state.logged_in:
                         st.error("⚠️ Vui lòng xác nhận bạn không phải là người máy!")
                     elif phone in users_db:
                         st.error("⚠️ Số điện thoại này đã được đăng ký. Vui lòng đăng nhập!")
+                    elif email_exists:
+                        st.error("⚠️ Email này đã được đăng ký bởi tài khoản khác!")
                     else:
                         users_db[phone] = {
-                            "password": reg_password,
+                            "password": hash_password(reg_password),
                             "role": "user",
                             "name": full_name,
                             "email": email,
