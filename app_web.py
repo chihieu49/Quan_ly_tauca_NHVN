@@ -8,6 +8,7 @@ import zipfile
 import urllib.parse
 from PIL import Image
 import json
+import re
 try:
     from pyzbar.pyzbar import decode as pyzbar_decode
 except ImportError:
@@ -326,6 +327,7 @@ if not st.session_state.logged_in:
                     if user_info and user_info.get("password") == password:
                         st.session_state.logged_in = True
                         st.session_state.role = user_info.get("role", "user")
+                        st.session_state.name = user_info.get("name", "USER")
                         st.rerun()
                     else:
                         st.error("Tên đăng nhập hoặc mật khẩu không đúng!")
@@ -369,6 +371,8 @@ if not st.session_state.logged_in:
                         st.error("⚠️ Vui lòng điền đầy đủ các trường bắt buộc (*)")
                     elif reg_password != reg_confirm_password:
                         st.error("⚠️ Mật khẩu xác nhận không khớp!")
+                    elif len(reg_password) < 8 or not re.search(r"[a-z]", reg_password) or not re.search(r"[A-Z]", reg_password) or not re.search(r"[0-9]", reg_password) or not re.search(r"[!@#$%^&*(),.?\":{}|<>]", reg_password):
+                        st.error("⚠️ Mật khẩu phải có ít nhất 8 ký tự, bao gồm chữ hoa, chữ thường, số và ký tự đặc biệt!")
                     elif not agree_terms:
                         st.error("⚠️ Bạn cần đồng ý với Điều khoản sử dụng và Chính sách bảo mật!")
                     elif not not_robot:
@@ -413,10 +417,11 @@ with st.sidebar:
     menu = st.radio("MENU CHÍNH", menu_options)
     
     st.markdown("---")
-    st.markdown(f"**Tài khoản:** `{st.session_state.role.upper()}`")
+    st.markdown(f"**Tài khoản:** `{st.session_state.get('name', 'USER').upper()}`")
     if st.button("🚪 Đăng xuất", use_container_width=True):
         st.session_state.logged_in = False
         st.session_state.role = None
+        st.session_state.name = None
         st.rerun()
         
     st.markdown("---")
