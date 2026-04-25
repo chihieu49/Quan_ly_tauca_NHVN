@@ -428,7 +428,11 @@ if not st.session_state.logged_in:
                             "phone": phone
                         }
                         save_users(users_db)
-                        st.success("✅ Đăng ký thành công! Bạn có thể chuyển sang trang Đăng nhập.")
+                        st.success("✅ Đăng ký thành công! Hệ thống sẽ tự động chuyển sang trang Đăng nhập...")
+                        import time
+                        time.sleep(1.5)
+                        st.session_state.auth_mode = "login"
+                        st.rerun()
             st.markdown('</div>', unsafe_allow_html=True)
             
             st.markdown('<div class="auth-link">', unsafe_allow_html=True)
@@ -450,7 +454,7 @@ with st.sidebar:
     st.markdown("---")
     
     if st.session_state.role == "admin":
-        menu_options = ["🔍 Tra cứu thông tin", "⚙️ Quản lý Hệ thống & QR", "🔄 Đối chiếu dữ liệu", "📊 Lọc & Xuất báo cáo"]
+        menu_options = ["🔍 Tra cứu thông tin", "⚙️ Quản lý Hệ thống & QR", "🔄 Đối chiếu dữ liệu", "📊 Lọc & Xuất báo cáo", "👥 Quản lý Người dùng"]
     else:
         menu_options = ["🔍 Tra cứu thông tin", "📊 Lọc & Xuất báo cáo"]
         
@@ -931,3 +935,69 @@ elif menu == "📊 Lọc & Xuất báo cáo":
                                         dl.to_excel(writer, sheet_name=f"VP_{str(loc).replace('/', '_').replace(chr(92), '_')}"[:31], index=False)
                         st.download_button("📥 XÁC NHẬN TẢI BÁO CÁO EXCEL", data=output.getvalue(), file_name=f"Bao_Cao_Vi_Pham_NHVN_{datetime.now().strftime('%d%m%Y')}.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
         st.markdown('</div>', unsafe_allow_html=True)
+
+# ---------------------------------------------------------
+# TAB 5: QUẢN LÝ NGƯỜI DÙNG
+# ---------------------------------------------------------
+elif menu == "👥 Quản lý Người dùng":
+    st.header("👥 QUẢN LÝ NGƯỜI DÙNG")
+    
+    users_db = load_users()
+    
+    st.subheader("📋 Danh sách Tài khoản")
+    df_users = pd.DataFrame.from_dict(users_db, orient='index').reset_index()
+    df_users.rename(columns={'index': 'Số điện thoại (ID)', 'name': 'Họ và tên', 'email': 'Email', 'role': 'Quyền'}, inplace=True)
+    df_users = df_users[['Số điện thoại (ID)', 'Họ và tên', 'Email', 'Quyền']]
+    st.dataframe(df_users, use_container_width=True, hide_index=True)
+    
+    st.markdown("---")
+    st.subheader("⚙️ Tùy chỉnh Tài khoản")
+    
+    user_list = [f"{v.get('name', '')} - {k}" for k, v in users_db.items()]
+    selected_user_str = st.selectbox("Chọn người dùng để thao tác:", [""] + user_list)
+    
+    if selected_user_str:
+        selected_phone = selected_user_str.split(" - ")[-1]
+        user_info = users_db.get(selected_phone)
+        
+        if user_info:
+            with st.form("edit_user_form"):
+                st.info(f"Đang chỉnh sửa: **{selected_phone}**")
+                
+                col1, col2 = st.columns(2)
+                with col1:
+                    new_name = st.text_input("Họ và tên", value=user_info.get("name", ""))
+                    new_email = st.text_input("Email", value=user_info.get("email", ""))
+                with col2:
+                    new_role = st.selectbox("Quyền", ["user", "admin"], index=0 if user_info.get("role") == "user" else 1)
+                    new_password = st.text_input("Reset Mật khẩu (Bỏ trống nếu không đổi)", type="password", help="Nhập mật khẩu mới nếu muốn reset. (Chưa mã hóa, hệ thống sẽ tự băm)")
+                
+                delete_user = st.checkbox("⚠️ Xác nhận XÓA TÀI KHOẢN này vĩnh viễn")
+                
+                submit_edit = st.form_submit_button("Lưu thay đổi", type="primary")
+                
+                if submit_edit:
+                    if delete_user:
+                        if selected_phone == "admin" and len([u for u in users_db.values() if u.get("role") == "admin"]) <= 1:
+                            st.error("⚠️ Không thể xóa Admin cuối cùng của hệ thống!")
+                        else:
+                            del users_db[selected_phone]
+                            save_users(users_db)
+                            st.success("✅ Đã xóa tài khoản thành công!")
+                            import time
+                            time.sleep(1.5)
+                            st.rerun()
+                    else:
+                        users_db[selected_phone]["name"] = new_name
+                        users_db[selected_phone]["email"] = new_email
+                        users_db[selected_phone]["role"] = new_role
+                        
+                        if new_password.strip():
+                            users_db[selected_phone]["password"] = hash_password(new_password)
+                            st.warning("🔑 Đã đặt lại mật khẩu mới!")
+                            
+                        save_users(users_db)
+                        st.success("✅ Cập nhật thông tin thành công!")
+                        import time
+                        time.sleep(1.5)
+                        st.rerun()
