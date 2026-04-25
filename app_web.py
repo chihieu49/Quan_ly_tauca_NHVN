@@ -263,6 +263,35 @@ if "tau" in params:
 # =========================================================
 # GIAO DIỆN QUẢN TRỊ TRÊN MÁY TÍNH (ADMIN DASHBOARD)
 # =========================================================
+if "logged_in" not in st.session_state:
+    st.session_state.logged_in = False
+    st.session_state.role = None
+
+if not st.session_state.logged_in:
+    st.markdown("<div style='text-align: center; margin-top: 50px;'>", unsafe_allow_html=True)
+    st.markdown("<h2>🔐 ĐĂNG NHẬP HỆ THỐNG</h2>", unsafe_allow_html=True)
+    st.markdown("</div>", unsafe_allow_html=True)
+    
+    col1, col2, col3 = st.columns([1, 1.5, 1])
+    with col2:
+        with st.form("login_form"):
+            username = st.text_input("Tên đăng nhập")
+            password = st.text_input("Mật khẩu", type="password")
+            submit = st.form_submit_button("Đăng nhập")
+            
+            if submit:
+                if username == "admin" and password == "admin":
+                    st.session_state.logged_in = True
+                    st.session_state.role = "admin"
+                    st.rerun()
+                elif username == "user" and password == "user":
+                    st.session_state.logged_in = True
+                    st.session_state.role = "user"
+                    st.rerun()
+                else:
+                    st.error("Tên đăng nhập hoặc mật khẩu không đúng!")
+    st.stop()
+
 with st.sidebar:
     try: st.image("logo_kiem_ngu.png", width=90)
     except: st.image("https://upload.wikimedia.org/wikipedia/commons/thumb/1/11/Vietnam_Fisheries_Surveillance_Logo.svg/1200px-Vietnam_Fisheries_Surveillance_Logo.svg.png", width=90)
@@ -271,7 +300,21 @@ with st.sidebar:
     app_domain = st.text_input("🌐 Tên miền Web (Dùng tạo mã QR):", value="https://quanlytaucanhvn-29032026.streamlit.app")
     
     st.markdown("---")
-    menu = st.radio("MENU CHÍNH", ["🔍 Tra cứu thông tin", "⚙️ Quản lý Hệ thống & QR", "🔄 Đối chiếu dữ liệu", "📊 Lọc & Xuất báo cáo"])
+    
+    if st.session_state.role == "admin":
+        menu_options = ["🔍 Tra cứu thông tin", "⚙️ Quản lý Hệ thống & QR", "🔄 Đối chiếu dữ liệu", "📊 Lọc & Xuất báo cáo"]
+    else:
+        menu_options = ["🔍 Tra cứu thông tin", "📊 Lọc & Xuất báo cáo"]
+        
+    menu = st.radio("MENU CHÍNH", menu_options)
+    
+    st.markdown("---")
+    st.markdown(f"**Tài khoản:** `{st.session_state.role.upper()}`")
+    if st.button("🚪 Đăng xuất", use_container_width=True):
+        st.session_state.logged_in = False
+        st.session_state.role = None
+        st.rerun()
+        
     st.markdown("---")
     st.caption("© 2026 - Chi cục Thủy sản NHVN")
 
