@@ -293,7 +293,7 @@ if not st.session_state.logged_in:
     st.stop()
 
 with st.sidebar:
-    try: st.image("logo_kiem_ngu.png", width=90)
+    try: st.image("logo_kiem_ngu.png", width=180)
     except: st.image("https://upload.wikimedia.org/wikipedia/commons/thumb/1/11/Vietnam_Fisheries_Surveillance_Logo.svg/1200px-Vietnam_Fisheries_Surveillance_Logo.svg.png", width=90)
     st.markdown("### QUẢN LÝ TÀU CÁ")
     
@@ -316,7 +316,7 @@ with st.sidebar:
         st.rerun()
         
     st.markdown("---")
-    st.caption("© 2026 - Chi cục Thủy sản NHVN")
+    st.caption("© 2026 - Chi cục Thủy sản tỉnh Khánh Hòa - Kiểm Ngư Ninh Hòa-Vạn Ninh")
 
 df_db, mmap = load_master_db()
 
