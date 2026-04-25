@@ -10,6 +10,11 @@ from PIL import Image
 import json
 import re
 import hashlib
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
+import random
+import time
 try:
     from pyzbar.pyzbar import decode as pyzbar_decode
 except ImportError:
@@ -116,6 +121,41 @@ def load_users():
 def save_users(users_data):
     with open(USERS_FILE, "w", encoding="utf-8") as f:
         json.dump(users_data, f, indent=4, ensure_ascii=False)
+
+def send_otp_email(to_email, otp_code):
+    try:
+        sender_email = st.secrets["email"]["user"]
+        sender_pass = st.secrets["email"]["password"]
+        
+        msg = MIMEMultipart()
+        msg['From'] = f"Hệ thống Quản lý Tàu cá <{sender_email}>"
+        msg['To'] = to_email
+        msg['Subject'] = "Mã xác thực Đặt lại mật khẩu (OTP)"
+        
+        body = f"""
+        Xin chào,
+        
+        Bạn đã yêu cầu đặt lại mật khẩu cho tài khoản trên Hệ thống Quản lý Tàu cá NHVN.
+        Dưới đây là mã xác thực OTP của bạn:
+        
+        {otp_code}
+        
+        Mã này có hiệu lực trong vòng 5 phút. Vui lòng không chia sẻ mã này cho bất kỳ ai.
+        Nếu bạn không yêu cầu đặt lại mật khẩu, vui lòng bỏ qua email này.
+        
+        Trân trọng,
+        Ban Quản trị Hệ thống
+        """
+        msg.attach(MIMEText(body, 'plain', 'utf-8'))
+        
+        server = smtplib.SMTP('smtp.gmail.com', 587)
+        server.starttls()
+        server.login(sender_email, sender_pass)
+        server.send_message(msg)
+        server.quit()
+        return True, ""
+    except Exception as e:
+        return False, str(e)
 
 COLUMN_ALIASES = {
     'SO_DANG_KY': ['số đăng ký', 'biển số', 'số đk'],
@@ -317,6 +357,12 @@ if "logged_in" not in st.session_state:
 if "auth_mode" not in st.session_state:
     st.session_state.auth_mode = "login"
 
+if "fp_step" not in st.session_state:
+    st.session_state.fp_step = 1
+
+if "otp_data" not in st.session_state:
+    st.session_state.otp_data = {"code": None, "time": 0, "phone": None, "attempts": 0}
+
 if not st.session_state.logged_in:
     users_db = load_users()
     st.markdown("<div style='margin-top: 50px;'></div>", unsafe_allow_html=True)
@@ -346,12 +392,108 @@ if not st.session_state.logged_in:
             st.markdown('</div>', unsafe_allow_html=True)
             
             st.markdown('<div class="auth-link">', unsafe_allow_html=True)
+            if st.button("Trợ giúp: Quên mật khẩu?", use_container_width=True):
+                st.session_state.auth_mode = "forgot_password"
+                st.session_state.fp_step = 1
+                st.rerun()
             if st.button("Chưa có tài khoản? Đăng ký ngay", use_container_width=True):
                 st.session_state.auth_mode = "register"
                 st.rerun()
             st.markdown('</div>', unsafe_allow_html=True)
                 
-        else: # Chế độ Đăng ký
+        elif st.session_state.auth_mode == "forgot_password":
+            st.markdown('<div class="auth-title">Quên Mật Khẩu</div>', unsafe_allow_html=True)
+            st.markdown('<div class="auth-subtitle">Quy trình khôi phục mật khẩu 3 bước</div>', unsafe_allow_html=True)
+            
+            st.markdown('<div class="auth-form-container">', unsafe_allow_html=True)
+            
+            if st.session_state.fp_step == 1:
+                with st.form("fp_step1"):
+                    fp_phone = st.text_input("Nhập Số điện thoại đã đăng ký *", placeholder="📞 VD: 0912345678")
+                    not_robot_fp = st.checkbox("Tôi không phải là người máy *")
+                    submit_fp1 = st.form_submit_button("Tiếp tục (Gửi OTP)")
+                    
+                    if submit_fp1:
+                        if not fp_phone:
+                            st.error("⚠️ Vui lòng nhập số điện thoại!")
+                        elif not not_robot_fp:
+                            st.error("⚠️ Vui lòng xác nhận không phải là người máy!")
+                        else:
+                            user_info = users_db.get(fp_phone)
+                            if user_info and user_info.get("email"):
+                                otp_code = str(random.randint(100000, 999999))
+                                st.session_state.otp_data = {"code": otp_code, "time": time.time(), "phone": fp_phone, "attempts": 0}
+                                
+                                success, err = send_otp_email(user_info["email"], otp_code)
+                                if success:
+                                    st.success(f"✅ Đã gửi mã OTP đến Email liên kết với SĐT này!")
+                                    time.sleep(1.5)
+                                    st.session_state.fp_step = 2
+                                    st.rerun()
+                                else:
+                                    st.error(f"⚠️ Không thể gửi Email. Có lỗi xảy ra, có thể Mật khẩu Ứng dụng sai!")
+                            else:
+                                st.error("⚠️ Số điện thoại không tồn tại trong hệ thống!")
+            
+            elif st.session_state.fp_step == 2:
+                with st.form("fp_step2"):
+                    st.info(f"Mã OTP đã được gửi đến Email của tài khoản **{st.session_state.otp_data['phone']}**. Vui lòng kiểm tra hộp thư đến (hoặc thư rác).")
+                    entered_otp = st.text_input("Nhập mã OTP (6 số) *")
+                    submit_fp2 = st.form_submit_button("Xác thực OTP")
+                    
+                    if submit_fp2:
+                        if time.time() - st.session_state.otp_data["time"] > 300:
+                            st.error("⚠️ Mã OTP đã hết hạn (quá 5 phút). Vui lòng yêu cầu lại!")
+                            st.session_state.fp_step = 1
+                        elif st.session_state.otp_data["attempts"] >= 3:
+                            st.error("⚠️ Bạn đã nhập sai OTP quá 3 lần. Vui lòng yêu cầu lại!")
+                            st.session_state.fp_step = 1
+                        elif entered_otp == st.session_state.otp_data["code"]:
+                            st.success("✅ Xác thực thành công!")
+                            time.sleep(1)
+                            st.session_state.fp_step = 3
+                            st.rerun()
+                        else:
+                            st.session_state.otp_data["attempts"] += 1
+                            st.error(f"⚠️ Mã OTP không chính xác! (Còn {3 - st.session_state.otp_data['attempts']} lần thử)")
+            
+            elif st.session_state.fp_step == 3:
+                with st.form("fp_step3"):
+                    st.info("Nhập mật khẩu mới cho tài khoản của bạn.")
+                    new_fp_pass = st.text_input("Mật khẩu mới *", type="password")
+                    confirm_fp_pass = st.text_input("Xác nhận mật khẩu *", type="password")
+                    submit_fp3 = st.form_submit_button("Cập nhật Mật khẩu")
+                    
+                    if submit_fp3:
+                        if not new_fp_pass or not confirm_fp_pass:
+                            st.error("⚠️ Vui lòng điền đủ thông tin!")
+                        elif new_fp_pass != confirm_fp_pass:
+                            st.error("⚠️ Mật khẩu xác nhận không khớp!")
+                        elif len(new_fp_pass) < 8 or not re.search(r"[a-z]", new_fp_pass) or not re.search(r"[A-Z]", new_fp_pass) or not re.search(r"[0-9]", new_fp_pass) or not re.search(r"[!@#$%^&*(),.?\":{}|<>]", new_fp_pass):
+                            st.error("⚠️ Mật khẩu phải có ít nhất 8 ký tự, bao gồm chữ hoa, thường, số và ký tự đặc biệt!")
+                        else:
+                            phone = st.session_state.otp_data["phone"]
+                            old_hash = users_db[phone]["password"]
+                            if verify_password(new_fp_pass, old_hash):
+                                st.error("⚠️ Mật khẩu mới không được trùng với mật khẩu cũ!")
+                            else:
+                                users_db[phone]["password"] = hash_password(new_fp_pass)
+                                save_users(users_db)
+                                st.success("✅ Đặt lại mật khẩu thành công! Chuyển về trang đăng nhập...")
+                                time.sleep(2)
+                                st.session_state.auth_mode = "login"
+                                st.session_state.fp_step = 1
+                                st.rerun()
+            
+            st.markdown('</div>', unsafe_allow_html=True)
+            st.markdown('<div class="auth-link">', unsafe_allow_html=True)
+            if st.button("🔙 Quay lại Đăng nhập", use_container_width=True):
+                st.session_state.auth_mode = "login"
+                st.session_state.fp_step = 1
+                st.rerun()
+            st.markdown('</div>', unsafe_allow_html=True)
+            
+        elif st.session_state.auth_mode == "register": # Chế độ Đăng ký
             st.markdown('<div class="auth-title">Tạo tài khoản</div>', unsafe_allow_html=True)
             st.markdown('<div class="auth-subtitle">Điền thông tin để tạo tài khoản mới</div>', unsafe_allow_html=True)
             
