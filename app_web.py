@@ -7,6 +7,7 @@ import qrcode
 import zipfile
 import urllib.parse
 from PIL import Image
+import json
 try:
     from pyzbar.pyzbar import decode as pyzbar_decode
 except ImportError:
@@ -61,6 +62,19 @@ st.markdown("""
     .m-alert-val { font-size: 18px; font-weight: 900; margin: 0;}
     
     .data-card { background: white; padding: 20px; border-radius: 10px; border: 1px solid #dee2e6; margin-bottom: 20px;}
+    
+    /* Auth Form CSS */
+    .auth-container { background-color: #ffffff; border-radius: 12px; padding: 30px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); border: 1px solid #e2e8f0; }
+    .auth-title { text-align: center; color: #1e293b; font-size: 26px; font-weight: bold; margin-bottom: 5px; }
+    .auth-subtitle { text-align: center; color: #64748b; font-size: 14px; margin-bottom: 25px; }
+    .auth-form-container [data-testid="stForm"] { border: none !important; padding: 0 !important; }
+    .auth-form-container [data-baseweb="input"] { border-radius: 6px; }
+    .auth-form-container [data-testid="stFormSubmitButton"] button { background-color: #1d4ed8; color: white; border-radius: 6px; font-weight: bold; padding: 12px; border: none; transition: 0.2s; }
+    .auth-form-container [data-testid="stFormSubmitButton"] button:hover { background-color: #1e40af; }
+    .fake-recaptcha { border: 1px solid #d1d5db; background-color: #f9fafb; border-radius: 4px; padding: 12px 15px; display: flex; align-items: center; justify-content: space-between; margin-bottom: 15px; margin-top: 10px;}
+    .auth-link { text-align: center; margin-top: 15px; }
+    .auth-link button { background: none; border: none; color: #2563eb; padding: 0; font-weight: normal; box-shadow: none; }
+    .auth-link button:hover { text-decoration: underline; color: #1d4ed8; background: none; }
     </style>
 """, unsafe_allow_html=True)
 
@@ -69,6 +83,26 @@ st.markdown("""
 # =========================================================
 DB_FILE = "CSDL_TauCa_Master.xlsx"
 QR_LOG_FILE = "Da_Tao_QR_Log.txt"
+USERS_FILE = "users.json"
+
+def load_users():
+    if not os.path.exists(USERS_FILE):
+        default_users = {
+            "admin": {"password": "admin", "role": "admin", "name": "Quản trị viên", "email": "admin@nhvn.gov.vn", "phone": "admin"},
+            "user": {"password": "user", "role": "user", "name": "Người dùng", "email": "user@nhvn.gov.vn", "phone": "user"}
+        }
+        with open(USERS_FILE, "w", encoding="utf-8") as f:
+            json.dump(default_users, f, indent=4, ensure_ascii=False)
+        return default_users
+    try:
+        with open(USERS_FILE, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        return {}
+
+def save_users(users_data):
+    with open(USERS_FILE, "w", encoding="utf-8") as f:
+        json.dump(users_data, f, indent=4, ensure_ascii=False)
 
 COLUMN_ALIASES = {
     'SO_DANG_KY': ['số đăng ký', 'biển số', 'số đk'],
@@ -267,33 +301,103 @@ if "logged_in" not in st.session_state:
     st.session_state.logged_in = False
     st.session_state.role = None
 
+if "auth_mode" not in st.session_state:
+    st.session_state.auth_mode = "login"
+
 if not st.session_state.logged_in:
-    st.markdown("<div style='text-align: center; margin-top: 50px;'>", unsafe_allow_html=True)
-    st.markdown("<h2>🔐 ĐĂNG NHẬP HỆ THỐNG</h2>", unsafe_allow_html=True)
-    st.markdown("</div>", unsafe_allow_html=True)
+    users_db = load_users()
+    st.markdown("<div style='margin-top: 50px;'></div>", unsafe_allow_html=True)
     
     col1, col2, col3 = st.columns([1, 1.5, 1])
     with col2:
-        with st.form("login_form"):
-            username = st.text_input("Tên đăng nhập")
-            password = st.text_input("Mật khẩu", type="password")
-            submit = st.form_submit_button("Đăng nhập")
+        st.markdown('<div class="auth-container">', unsafe_allow_html=True)
+        if st.session_state.auth_mode == "login":
+            st.markdown('<div class="auth-title">Đăng nhập</div>', unsafe_allow_html=True)
+            st.markdown('<div class="auth-subtitle">Vui lòng nhập thông tin để tiếp tục</div>', unsafe_allow_html=True)
             
-            if submit:
-                if username == "admin" and password == "admin":
-                    st.session_state.logged_in = True
-                    st.session_state.role = "admin"
-                    st.rerun()
-                elif username == "user" and password == "user":
-                    st.session_state.logged_in = True
-                    st.session_state.role = "user"
-                    st.rerun()
-                else:
-                    st.error("Tên đăng nhập hoặc mật khẩu không đúng!")
+            st.markdown('<div class="auth-form-container">', unsafe_allow_html=True)
+            with st.form("login_form"):
+                username = st.text_input("Tên đăng nhập (Số điện thoại) *", placeholder="👤 Nhập số điện thoại")
+                password = st.text_input("Mật khẩu *", type="password", placeholder="🔒 Nhập mật khẩu")
+                submit = st.form_submit_button("Đăng nhập")
+                
+                if submit:
+                    user_info = users_db.get(username)
+                    if user_info and user_info.get("password") == password:
+                        st.session_state.logged_in = True
+                        st.session_state.role = user_info.get("role", "user")
+                        st.rerun()
+                    else:
+                        st.error("Tên đăng nhập hoặc mật khẩu không đúng!")
+            st.markdown('</div>', unsafe_allow_html=True)
+            
+            st.markdown('<div class="auth-link">', unsafe_allow_html=True)
+            if st.button("Chưa có tài khoản? Đăng ký ngay", use_container_width=True):
+                st.session_state.auth_mode = "register"
+                st.rerun()
+            st.markdown('</div>', unsafe_allow_html=True)
+                
+        else: # Chế độ Đăng ký
+            st.markdown('<div class="auth-title">Tạo tài khoản</div>', unsafe_allow_html=True)
+            st.markdown('<div class="auth-subtitle">Điền thông tin để tạo tài khoản mới</div>', unsafe_allow_html=True)
+            
+            st.markdown('<div class="auth-form-container">', unsafe_allow_html=True)
+            with st.form("register_form"):
+                full_name = st.text_input("Họ và tên *", placeholder="👤 Nhập họ và tên")
+                email = st.text_input("Email *", placeholder="✉️ Nhập email của bạn")
+                phone = st.text_input("Số điện thoại *", placeholder="📞 Nhập số điện thoại (Dùng làm Tên đăng nhập)")
+                reg_password = st.text_input("Mật khẩu *", type="password", placeholder="🔒 Nhập mật khẩu")
+                reg_confirm_password = st.text_input("Xác nhận mật khẩu *", type="password", placeholder="🔒 Nhập lại mật khẩu")
+                
+                agree_terms = st.checkbox("Tôi đồng ý với Điều khoản sử dụng và Chính sách bảo mật")
+                
+                st.markdown('''
+                    <div class="fake-recaptcha">
+                        <div style="font-size: 14px; color: #374151;">☑️ Vui lòng tick ô bên dưới để xác nhận</div>
+                        <div style="display: flex; flex-direction: column; align-items: center;">
+                            <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/a/ad/RecaptchaLogo.svg/120px-RecaptchaLogo.svg.png" width="30">
+                            <span style="font-size: 8px; color: #9ca3af;">reCAPTCHA</span>
+                        </div>
+                    </div>
+                ''', unsafe_allow_html=True)
+                not_robot = st.checkbox("Tôi không phải là người máy *")
+                
+                submit_reg = st.form_submit_button("Đăng ký")
+                
+                if submit_reg:
+                    if not full_name or not email or not phone or not reg_password or not reg_confirm_password:
+                        st.error("⚠️ Vui lòng điền đầy đủ các trường bắt buộc (*)")
+                    elif reg_password != reg_confirm_password:
+                        st.error("⚠️ Mật khẩu xác nhận không khớp!")
+                    elif not agree_terms:
+                        st.error("⚠️ Bạn cần đồng ý với Điều khoản sử dụng và Chính sách bảo mật!")
+                    elif not not_robot:
+                        st.error("⚠️ Vui lòng xác nhận bạn không phải là người máy!")
+                    elif phone in users_db:
+                        st.error("⚠️ Số điện thoại này đã được đăng ký. Vui lòng đăng nhập!")
+                    else:
+                        users_db[phone] = {
+                            "password": reg_password,
+                            "role": "user",
+                            "name": full_name,
+                            "email": email,
+                            "phone": phone
+                        }
+                        save_users(users_db)
+                        st.success("✅ Đăng ký thành công! Bạn có thể chuyển sang trang Đăng nhập.")
+            st.markdown('</div>', unsafe_allow_html=True)
+            
+            st.markdown('<div class="auth-link">', unsafe_allow_html=True)
+            if st.button("Đã có tài khoản? Đăng nhập", use_container_width=True):
+                st.session_state.auth_mode = "login"
+                st.rerun()
+            st.markdown('</div>', unsafe_allow_html=True)
+            
+        st.markdown('</div>', unsafe_allow_html=True)
     st.stop()
 
 with st.sidebar:
-    try: st.image("logo_kiem_ngu.png", width=180)
+    try: st.image("logo_kiem_ngu.png", width=90)
     except: st.image("https://upload.wikimedia.org/wikipedia/commons/thumb/1/11/Vietnam_Fisheries_Surveillance_Logo.svg/1200px-Vietnam_Fisheries_Surveillance_Logo.svg.png", width=90)
     st.markdown("### QUẢN LÝ TÀU CÁ")
     
@@ -316,7 +420,7 @@ with st.sidebar:
         st.rerun()
         
     st.markdown("---")
-    st.caption("© 2026 - Chi cục Thủy sản tỉnh Khánh Hòa - Kiểm Ngư Ninh Hòa-Vạn Ninh")
+    st.caption("© 2026 - Chi cục Thủy sản NHVN")
 
 df_db, mmap = load_master_db()
 
