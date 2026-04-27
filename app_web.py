@@ -90,9 +90,10 @@ st.markdown("""
 # =========================================================
 # LÕI DỮ LIỆU & AI
 # =========================================================
-DB_FILE = "CSDL_TauCa_Master.xlsx"
-QR_LOG_FILE = "Da_Tao_QR_Log.txt"
-USERS_FILE = "users.json"
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+DB_FILE = os.path.join(BASE_DIR, "CSDL_TauCa_Master.xlsx")
+QR_LOG_FILE = os.path.join(BASE_DIR, "Da_Tao_QR_Log.txt")
+USERS_FILE = os.path.join(BASE_DIR, "users.json")
 
 def hash_password(password):
     salt = os.urandom(16).hex()
@@ -148,7 +149,10 @@ def sync_to_github(file_path):
             content = f.read()
         
         encoded_content = base64.b64encode(content).decode("utf-8")
-        github_path = f"{repo_prefix}{file_path}" if repo_prefix else file_path
+        
+        # Vì file_path giờ là đường dẫn tuyệt đối, ta chỉ lấy tên file để ghép với repo_prefix
+        file_name = os.path.basename(file_path)
+        github_path = f"{repo_prefix}{file_name}" if repo_prefix else file_name
         
         url = f"https://api.github.com/repos/{repo}/contents/{github_path}"
         headers = {
@@ -162,7 +166,7 @@ def sync_to_github(file_path):
             sha = response.json().get("sha")
 
         data = {
-            "message": f"Auto-sync {file_path} from Streamlit app",
+            "message": f"Auto-sync {file_name} from Streamlit app",
             "content": encoded_content
         }
         if sha:
@@ -170,7 +174,7 @@ def sync_to_github(file_path):
 
         put_response = requests.put(url, headers=headers, json=data)
         if put_response.status_code in [200, 201]:
-            st.toast(f"✅ Đã đồng bộ `{file_path}` lên kho lưu trữ đám mây an toàn!")
+            st.toast(f"✅ Đã đồng bộ `{file_name}` lên kho lưu trữ đám mây an toàn!")
         else:
             error_msg = put_response.json().get('message', 'Không rõ lỗi')
             st.error(f"❌ Lỗi đồng bộ lên GitHub ({put_response.status_code}): {error_msg}")
