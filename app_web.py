@@ -128,13 +128,16 @@ def save_users(users_data):
 def sync_to_github(file_path):
     try:
         if "github" not in st.secrets:
+            st.warning("⚠️ Hệ thống chưa được cấu hình GitHub Secrets. Dữ liệu sẽ không được lưu vĩnh viễn!")
             return
         token = st.secrets["github"]["token"]
         repo = st.secrets["github"]["repo"]
         if token == "YOUR_GITHUB_TOKEN_HERE":
+            st.error("⚠️ Bạn chưa điền GitHub Token thật vào Secrets. Hãy tạo Token và dán vào Streamlit Cloud Secrets!")
             return
         repo_prefix = st.secrets["github"].get("folder", "")
-    except Exception:
+    except Exception as e:
+        st.error(f"⚠️ Lỗi cấu hình GitHub Secrets: {e}")
         return
 
     if not os.path.exists(file_path):
@@ -165,9 +168,14 @@ def sync_to_github(file_path):
         if sha:
             data["sha"] = sha
 
-        requests.put(url, headers=headers, json=data)
+        put_response = requests.put(url, headers=headers, json=data)
+        if put_response.status_code in [200, 201]:
+            st.toast(f"✅ Đã đồng bộ `{file_path}` lên kho lưu trữ đám mây an toàn!")
+        else:
+            error_msg = put_response.json().get('message', 'Không rõ lỗi')
+            st.error(f"❌ Lỗi đồng bộ lên GitHub ({put_response.status_code}): {error_msg}")
     except Exception as e:
-        print(f"Error syncing to github: {e}")
+        st.error(f"❌ Lỗi đồng bộ file {file_path}: {e}")
 
 def send_otp_email(to_email, otp_code):
     try:
@@ -385,7 +393,7 @@ if "tau" in params:
 <div class="m-row"><span class="m-label">Nghề khai thác</span><span class="m-val">{nghe}</span></div>
 <div class="m-grid"><div class="m-row"><span class="m-label">Chiều dài Lmax</span><span class="m-val">{lmax} m</span></div><div class="m-row"><span class="m-label">Công suất máy</span><span class="m-val">{cs} KW</span></div></div></div>
 </div></div>
-<div style="text-align:center; padding: 20px; color: #adb5bd; font-size: 12px; font-family:sans-serif;">Cấp bởi Chi cục Thủy sản và Biển đảo tỉnh Khánh Hoà</div>"""
+<div style="text-align:center; padding: 20px; color: #adb5bd; font-size: 12px; font-family:sans-serif;">Cấp bởi Chi cục Thủy sản và Biển Đảo tỉnh Khánh hoà - trạm Kiểm ngư NHVN</div>"""
     st.markdown(html_mobile, unsafe_allow_html=True)
     if st.button("🔙 Quét mã khác / Quay lại Trang chủ", use_container_width=True):
         st.session_state["search_mode"] = "📷 Quét QR Tự động (Camera)"
