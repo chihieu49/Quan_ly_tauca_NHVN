@@ -15,6 +15,8 @@ from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 import random
 import time
+import requests
+import base64
 try:
     from pyzbar.pyzbar import decode as pyzbar_decode
 except ImportError:
@@ -121,6 +123,51 @@ def load_users():
 def save_users(users_data):
     with open(USERS_FILE, "w", encoding="utf-8") as f:
         json.dump(users_data, f, indent=4, ensure_ascii=False)
+    sync_to_github(USERS_FILE)
+
+def sync_to_github(file_path):
+    try:
+        if "github" not in st.secrets:
+            return
+        token = st.secrets["github"]["token"]
+        repo = st.secrets["github"]["repo"]
+        if token == "YOUR_GITHUB_TOKEN_HERE":
+            return
+        repo_prefix = st.secrets["github"].get("folder", "")
+    except Exception:
+        return
+
+    if not os.path.exists(file_path):
+        return
+
+    try:
+        with open(file_path, "rb") as f:
+            content = f.read()
+        
+        encoded_content = base64.b64encode(content).decode("utf-8")
+        github_path = f"{repo_prefix}{file_path}" if repo_prefix else file_path
+        
+        url = f"https://api.github.com/repos/{repo}/contents/{github_path}"
+        headers = {
+            "Authorization": f"token {token}",
+            "Accept": "application/vnd.github.v3+json"
+        }
+
+        response = requests.get(url, headers=headers)
+        sha = None
+        if response.status_code == 200:
+            sha = response.json().get("sha")
+
+        data = {
+            "message": f"Auto-sync {file_path} from Streamlit app",
+            "content": encoded_content
+        }
+        if sha:
+            data["sha"] = sha
+
+        requests.put(url, headers=headers, json=data)
+    except Exception as e:
+        print(f"Error syncing to github: {e}")
 
 def send_otp_email(to_email, otp_code):
     try:
@@ -803,6 +850,7 @@ elif menu == "⚙️ Quản lý Hệ thống & QR":
                 df.to_pickle(pkl_file)
                 
                 load_master_db.clear()
+                sync_to_github(DB_FILE)
             st.success("✅ Đã cập nhật và Tối ưu hóa CSDL lên máy chủ thành công!")
             st.rerun()
 
@@ -858,6 +906,8 @@ elif menu == "⚙️ Quản lý Hệ thống & QR":
                     with open(QR_LOG_FILE, "a") as f:
                         for vid in new_vessels_list:
                             f.write(f"{vid}\n")
+                            
+                    sync_to_github(QR_LOG_FILE)
                     
                     my_bar.empty()
                     st.success(f"✅ Đã tạo xong {len(new_vessels)} Mã QR mới!")
@@ -876,6 +926,9 @@ elif menu == "⚙️ Quản lý Hệ thống & QR":
             st.markdown('<div class="btn-danger">', unsafe_allow_html=True)
             if st.button("🗑️ XÓA LỊCH SỬ & IN LẠI TOÀN BỘ"):
                 if os.path.exists(QR_LOG_FILE):
+                    with open(QR_LOG_FILE, "w") as f:
+                        f.write("")
+                    sync_to_github(QR_LOG_FILE)
                     os.remove(QR_LOG_FILE)
                     st.rerun()
                 else:
@@ -960,10 +1013,10 @@ elif menu == "📊 Lọc & Xuất báo cáo":
             selected_commune = st.selectbox("Lọc theo Địa phương:", ["Tất cả", "Xã Đại Lãnh", "Xã Tu Bông", "Xã Vạn Hưng", "Xã Vạn Ninh", "Xã Vạn Thắng", "Phường Đông Ninh Hoà", "Phường Hoà Thắng", "Xã Bắc Ninh Hoà", "Xã Nam Ninh Hoà", "Bắc Nha Trang"])
             
         with col_c2:
-            st.info("💡 **Tùy chọn lọc vi phạm:** Bạn có thể tự chọn tiêu chí quét tàu hết hạn tùy theo nghiệp vụ kiểm tra.")
+            st.info("💡 **Tùy chọn lọc hết hạn:** Bạn có thể tự chọn tiêu chí quét tàu hết hạn tùy theo nghiệp vụ kiểm tra.")
             
             # TÍNH NĂNG MỚI: CHỌN ĐIỀU KIỆN LỌC
-            filter_mode = st.selectbox("🎯 Lọc tàu vi phạm dựa trên:", [
+            filter_mode = st.selectbox("🎯 Lọc tàu hết hạn dựa trên:", [
                 "1. Kết hợp (Hết GPKTTS với mọi tàu + Hết Đăng kiểm với tàu ≥ 12m)",
                 "2. Chỉ lọc tàu hết hạn Giấy phép KTTS",
                 "3. Chỉ lọc tàu hết hạn Đăng kiểm"
@@ -1039,8 +1092,8 @@ elif menu == "📊 Lọc & Xuất báo cáo":
                         for col in ['<6', '6 đến <12', '12 đến <15', '15 đến <24', '>=24', 'Không rõ']:
                             if col not in df_thong_ke.columns: df_thong_ke[col] = 0
 
-                        df_thong_ke.rename(columns={'Tong_tau': 'Tổng số tàu', 'Tau_het_han': 'Tàu vi phạm (Hết hạn)'}, inplace=True)
-                        final_cols_tk = ['Xã/Phường mới', 'Tổng số tàu', 'Tàu vi phạm (Hết hạn)'] + [c for c in ['<6', '6 đến <12', '12 đến <15', '15 đến <24', '>=24', 'Không rõ'] if df_thong_ke[c].sum() > 0]
+                        df_thong_ke.rename(columns={'Tong_tau': 'Tổng số tàu', 'Tau_het_han': 'Tàu Hết hạn'}, inplace=True)
+                        final_cols_tk = ['Xã/Phường mới', 'Tổng số tàu', 'Tàu Hết hạn'] + [c for c in ['<6', '6 đến <12', '12 đến <15', '15 đến <24', '>=24', 'Không rõ'] if df_thong_ke[c].sum() > 0]
                         df_thong_ke = df_thong_ke[final_cols_tk]
 
                         tong_cong_row = {'Xã/Phường mới': 'TỔNG CỘNG'}
@@ -1060,8 +1113,8 @@ elif menu == "📊 Lọc & Xuất báo cáo":
                         st.markdown("### 📊 DASHBOARD TỔNG HỢP")
                         m1, m2, m3 = st.columns(3)
                         m1.metric("TỔNG SỐ TÀU LỌC ĐƯỢC", tong_cong_row['Tổng số tàu'])
-                        m2.metric("SỐ TÀU VI PHẠM (Hết hạn)", tong_cong_row['Tàu vi phạm (Hết hạn)'])
-                        m3.metric("TỶ LỆ VI PHẠM", f"{round((tong_cong_row['Tàu vi phạm (Hết hạn)'] / tong_cong_row['Tổng số tàu'] * 100), 1) if tong_cong_row['Tổng số tàu'] > 0 else 0}%")
+                        m2.metric("SỐ TÀU Hết hạn", tong_cong_row['Tàu Hết hạn'])
+                        m3.metric("TỶ LỆ HẾT HẠN", f"{round((tong_cong_row['Tàu Hết hạn'] / tong_cong_row['Tổng số tàu'] * 100), 1) if tong_cong_row['Tổng số tàu'] > 0 else 0}%")
                         st.dataframe(df_thong_ke, use_container_width=True, hide_index=True)
 
                         output = io.BytesIO()
@@ -1069,7 +1122,7 @@ elif menu == "📊 Lọc & Xuất báo cáo":
                             df_final.to_excel(writer, sheet_name='Danh sách chi tiết', index=False)
                             df_thong_ke.to_excel(writer, sheet_name='Bảng thống kê', index=False)
                             if not df_hh_exp.empty: 
-                                df_hh_exp.to_excel(writer, sheet_name='Tàu Vi Phạm (Tổng)', index=False)
+                                df_hh_exp.to_excel(writer, sheet_name='Tàu hết hạn (Tổng)', index=False)
                                 if split_expired:
                                     for loc in df_hh_full['Xã/Phường mới'].dropna().unique():
                                         dl = df_hh_full[df_hh_full['Xã/Phường mới'] == loc][cols_hh].copy()
