@@ -1,0 +1,16 @@
+{
+    "admin": {
+        "password": "fe26f886d24500171275a65495e1f18f$3ff169ee4de9d7b88d484a2c47519adcd6c672c71d3267b096f78770f53fd5a9",
+        "role": "admin",
+        "name": "Quản trị viên",
+        "email": "adminnhvn@gmail.com",
+        "phone": "admin"
+    },
+    "user": {
+        "password": "2aed21303c79ff2a32dc15a8c1e32fc4$af6d523f389b056f5204bdc64a0e4a26b901ae127f15efa19b700d15cebbde3f",
+        "role": "user",
+        "name": "Người dùng",
+        "email": "user@nhvn.gov.vn",
+        "phone": "user"
+    }
+}
