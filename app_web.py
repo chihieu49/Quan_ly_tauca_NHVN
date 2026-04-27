@@ -385,7 +385,7 @@ if "tau" in params:
 <div class="m-row"><span class="m-label">Nghề khai thác</span><span class="m-val">{nghe}</span></div>
 <div class="m-grid"><div class="m-row"><span class="m-label">Chiều dài Lmax</span><span class="m-val">{lmax} m</span></div><div class="m-row"><span class="m-label">Công suất máy</span><span class="m-val">{cs} KW</span></div></div></div>
 </div></div>
-<div style="text-align:center; padding: 20px; color: #adb5bd; font-size: 12px; font-family:sans-serif;">Cấp bởi Chi cục Thủy sản NHVN</div>"""
+<div style="text-align:center; padding: 20px; color: #adb5bd; font-size: 12px; font-family:sans-serif;">Cấp bởi Chi cục Thủy sản và Biển đảo tỉnh Khánh Hoà</div>"""
     st.markdown(html_mobile, unsafe_allow_html=True)
     if st.button("🔙 Quét mã khác / Quay lại Trang chủ", use_container_width=True):
         st.session_state["search_mode"] = "📷 Quét QR Tự động (Camera)"
@@ -634,7 +634,7 @@ if not st.session_state.logged_in:
     st.stop()
 
 with st.sidebar:
-    try: st.image("logo_kiem_ngu.png", width=90)
+    try: st.image("logo_kiem_ngu.png", width=180)
     except: st.image("https://upload.wikimedia.org/wikipedia/commons/thumb/1/11/Vietnam_Fisheries_Surveillance_Logo.svg/1200px-Vietnam_Fisheries_Surveillance_Logo.svg.png", width=90)
     st.markdown("### QUẢN LÝ TÀU CÁ")
     
@@ -658,7 +658,7 @@ with st.sidebar:
         st.rerun()
         
     st.markdown("---")
-    st.caption("© 2026 - Chi cục Thủy sản NHVN")
+    st.caption("© 2026 - Chi cục Thủy sản và Biển Đảo tỉnh Khánh hoà - trạm Kiểm ngư NHVN")
 
 df_db, mmap = load_master_db()
 
